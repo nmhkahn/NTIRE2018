@@ -10,26 +10,26 @@ def init_weights(modules):
 
 class SUnit(nn.Module):
     def __init__(self,
-                 in_channels, out_channels):
-        super(SUit, self).__init__()
+                 n_channels):
+        super(SUnit, self).__init__()
 
         self.ru = nn.Sequential(
             nn.ReLU(),
-            nn.Conv2d(in_channels, out_channels, 1, 1, 0),
-            nn.Sigmoid(inpace=True)
+            nn.Conv2d(n_channels, n_channels, 1, 1, 0),
+            nn.Sigmoid()
         )
 
     def forward(self, x):
         return x * self.ru(x)
 
 
-def select_act(act, in_channels, out_channels):
+def select_act(act, n_channels):
     if act == "sunit":
-        return SUit(in_channels, out_channels)
+        return SUnit(n_channels)
     elif act == "relu":
         return nn.ReLU()
     else:
-        raise NotImplementedError("We only support SUnit and ReLU")
+        raise NotImplementedError("Input is {}, but we only support SUnit and ReLU".format(act))
    
 
 class MeanShift(nn.Module):
@@ -62,11 +62,9 @@ class BasicBlock(nn.Module):
         super(BasicBlock, self).__init__()
 
         pad = 1 if ksize == 3 else 0
-        act = select_act(act, in_channels, out_channels)
-        
         self.body = nn.Sequential(
             nn.Conv2d(in_channels, out_channels, ksize, 1, pad),
-            act
+            select_act(act, out_channels)
         )
 
         init_weights(self.modules)
@@ -82,11 +80,10 @@ class ResidualBlock(nn.Module):
                  act="relu"):
         super(ResidualBlock, self).__init__()
 
-        act = select_act(act, in_channels, out_channels)
         self.body = nn.Sequential(
-            act,
+            select_act(act, in_channels),
             nn.Conv2d(in_channels, out_channels, 3, 1, 1),
-            act,
+            select_act(act, out_channels),
             nn.Conv2d(out_channels, out_channels, 3, 1, 1)
         )
 
@@ -106,10 +103,10 @@ class UpsampleBlock(nn.Module):
         super(UpsampleBlock, self).__init__()
 
         modules = []
-        act = select_act(act, n_channels, n_channels)
         # only support x2, x4, x8
         for _ in range(int(math.log(scale, 2))):
-            modules += [nn.Conv2d(n_channels, 4*n_channels, 3, 1, 1), act]
+            modules += [nn.Conv2d(n_channels, 4*n_channels, 3, 1, 1), 
+                        select_act(act, 4*n_channels)]
             modules += [nn.PixelShuffle(2)]
         self.body = nn.Sequential(*modules)
 

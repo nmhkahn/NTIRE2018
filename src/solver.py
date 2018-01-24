@@ -72,7 +72,6 @@ class Solver():
                 for param_group in self.optim.param_groups:
                     param_group["lr"] = learning_rate
                 
-                print(self.step, loss.data[0])
                 self.step += 1
                 if cfg.verbose and self.step % cfg.print_every == 0:
                     psnr = self.evaluate("dataset/DIV2K/valid", num_step=self.step)
@@ -144,8 +143,6 @@ class Solver():
             if not os.path.exists(sr_dir):
                 os.makedirs(sr_dir)
 
-            print(hr.shape, sr.shape)
-            
             sr_im_path = os.path.join(sr_dir, "{}".format(name))
             
             # evaluate PSNR

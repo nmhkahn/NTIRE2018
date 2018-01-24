@@ -1,11 +1,11 @@
 python src/train.py --patch_size=48 \
-                    --batch_size=32 \
+                    --batch_size=64 \
                     --max_steps=200000 \
                     --decay=150000 \
                     --model=carn \
-                    --ckpt_name=carn_8_1 \
-                    --scale_from=8 \
+                    --ckpt_name=carn_4_1 \
+                    --scale_from=4 \
                     --scale_to=1 \
-                    --act=relu \
-                    --print_every=10 \
+                    --act=sunit \
+                    --print_every=10000 \
                     --num_gpu=1
