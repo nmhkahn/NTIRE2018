@@ -16,10 +16,15 @@ class Solver():
         self.step = 0
         self.cfg = cfg
 
-        self.scale_from = cfg.scale_from
-        self.scale_to = cfg.scale_to
-        self.scale_diff = int(self.scale_from/self.scale_to)
+        self.path_from = cfg.path_from
+        self.path_to   = cfg.path_to
+        self.data_from = cfg.data_from
+        self.data_to   = cfg.data_to
 
+        self.scale_from = [int(s) for s in self.data_from if s.isdigit()][0]
+        self.scale_to   = [int(s) for s in self.data_to if s.isdigit()][0]
+        self.scale_diff = int(self.scale_from/self.scale_to)
+        
         self.refiner = model(scale_from=self.scale_from, 
                              scale_to=self.scale_to,
                              act=cfg.act)
@@ -29,9 +34,9 @@ class Solver():
             filter(lambda p: p.requires_grad, self.refiner.parameters()), 
             cfg.lr)
         
-        self.train_data = TrainDataset(cfg.train_data_path, 
-                                       scale_from=cfg.scale_from, 
-                                       scale_to=cfg.scale_to,
+        self.train_data = TrainDataset(self.path_from, self.path_to,
+                                       self.data_from, self.data_to,
+                                       self.scale_diff,
                                        size=cfg.patch_size)
         self.train_loader = DataLoader(self.train_data,
                                        batch_size=cfg.batch_size,
@@ -56,8 +61,8 @@ class Solver():
         while True:
             for inputs in self.train_loader:
                 self.refiner.train()
-                hr, lr = inputs[0], inputs[1]
-                
+                lr, hr = inputs[0], inputs[1]
+
                 hr = Variable(hr, requires_grad=False).cuda()
                 lr = Variable(lr, requires_grad=False).cuda()
                 sr = refiner(lr)
@@ -71,16 +76,14 @@ class Solver():
                 learning_rate = self.decay_learning_rate()
                 for param_group in self.optim.param_groups:
                     param_group["lr"] = learning_rate
-                
+
                 self.step += 1
                 if cfg.verbose and self.step % cfg.print_every == 0:
-                    psnr = self.evaluate("dataset/DIV2K/valid", num_step=self.step)
-                    
                     t2 = time.time()
                     remain_step = cfg.max_steps - self.step
-                    eta = (t2-t1)*remain_step/1000/3600
-                    print("[{}K/{}K] {:.2f} ETA: {:.1f} hours".
-                          format(int(self.step/1000), int(cfg.max_steps/1000), psnr, eta))
+                    eta = (t2-t1)*remain_step/cfg.print_every/3600
+                    print("[{}K/{}K] {:.5f} ETA: {:.1f} hours".
+                          format(int(self.step/1000), int(cfg.max_steps/1000), loss.data[0], eta))
                             
                     t1 = time.time()
                     self.save(cfg.ckpt_dir, cfg.ckpt_name)
@@ -134,6 +137,7 @@ class Solver():
             hr = hr.cpu().mul(255).clamp(0, 255).byte().permute(1, 2, 0).numpy()
             sr = sr.cpu().mul(255).clamp(0, 255).byte().permute(1, 2, 0).numpy()
             
+            """
             sr_dir = os.path.join(cfg.sample_dir,
                                   cfg.ckpt_name,
                                   str(num_step),
@@ -144,6 +148,8 @@ class Solver():
                 os.makedirs(sr_dir)
 
             sr_im_path = os.path.join(sr_dir, "{}".format(name))
+            misc.imsave(sr_im_path, sr)
+            """
             
             # evaluate PSNR
             # this evaluation is different to MATLAB version
@@ -152,8 +158,6 @@ class Solver():
             im1 = hr[bnd:-bnd, bnd:-bnd]
             im2 = sr[bnd:-bnd, bnd:-bnd]
             mean_psnr += psnr(im1, im2) / len(test_data)
-
-            misc.imsave(sr_im_path, sr)
 
         return mean_psnr
 

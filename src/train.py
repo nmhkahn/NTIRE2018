@@ -11,18 +11,19 @@ def parse_args():
     parser.add_argument("--model", type=str)
     parser.add_argument("--ckpt_name", type=str)
     
-    parser.add_argument("--print_every", type=int, default=10000)
-    parser.add_argument("--train_data_path", type=str, 
-                        default="dataset/DIV2K/train.h5")
+    parser.add_argument("--path_from", type=str)
+    parser.add_argument("--path_to", type=str)
+    parser.add_argument("--data_from", type=str)
+    parser.add_argument("--data_to", type=str)
+
     parser.add_argument("--ckpt_dir", type=str,
                         default="checkpoint")
     parser.add_argument("--sample_dir", type=str,
                         default="sample/")
+    parser.add_argument("--print_every", type=int, default=10000)
     
     parser.add_argument("--num_gpu", type=int, default=1)
     parser.add_argument("--shave", type=int, default=20)
-    parser.add_argument("--scale_from", type=int, default=2)
-    parser.add_argument("--scale_to", type=int, default=1)
 
     parser.add_argument("--verbose", action="store_true", default="store_true")
 

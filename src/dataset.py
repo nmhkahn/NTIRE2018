@@ -7,7 +7,7 @@ from PIL import Image
 import torch.utils.data as data
 import torchvision.transforms as transforms
 
-def random_crop(hr, lr, size, scale):
+def random_crop(lr, hr, size, scale):
     h, w = lr.shape[:-1]
     x = random.randint(0, w-size)
     y = random.randint(0, h-size)
@@ -18,7 +18,7 @@ def random_crop(hr, lr, size, scale):
     crop_lr = lr[y:y+size, x:x+size].copy()
     crop_hr = hr[hy:hy+hsize, hx:hx+hsize].copy()
 
-    return crop_hr, crop_lr
+    return crop_lr, crop_hr
 
 
 def random_flip_and_rotate(im1, im2):
@@ -39,72 +39,66 @@ def random_flip_and_rotate(im1, im2):
 
 
 class TrainDataset(data.Dataset):
-    def __init__(self, path, size, scale_from, scale_to):
+    def __init__(self, 
+                 path_from, path_to, 
+                 data_from, data_to, 
+                 scale_diff, size):
         super(TrainDataset, self).__init__()
 
         self.size = size
-        h5f = h5py.File(path, "r")
-
-        hr_str = "HR" if scale_to == 1 else "X{}".format(scale_to)
-        lr_str = "X{}".format(scale_from)
-        self.scale_diff = int(scale_from/scale_to)
+        self.scale_diff = scale_diff
+        f_from = h5py.File(path_from, "r")
+        f_to   = h5py.File(path_to, "r")
         
-        self.hr = [v[:] for v in h5f[hr_str].values()]
-        self.lr = [v[:] for v in h5f[lr_str].values()]
+        self.im_from = [v[:] for v in f_from[data_from].values()]
+        self.im_to   = [v[:] for v in f_to[data_to].values()]
         
-        h5f.close()
+        f_from.close(); f_to.close()
 
         self.transform = transforms.Compose([
             transforms.ToTensor()
         ])
 
     def __getitem__(self, index):
-        hr, lr = self.hr[index], self.lr[index]
-        hr, lr = random_crop(hr, lr, self.size, self.scale_diff)
-        hr, lr = random_flip_and_rotate(hr, lr)
+        im_from, im_to = self.im_from[index], self.im_to[index]
+        im_from, im_to = random_crop(im_from, im_to, self.size, self.scale_diff)
+        im_from, im_to = random_flip_and_rotate(im_from, im_to)
         
-        return self.transform(hr), self.transform(lr)
+        return self.transform(im_from), self.transform(im_to)
 
     def __len__(self):
-        return len(self.hr)
+        return len(self.im_to)
         
 
 class TestDataset(data.Dataset):
-    def __init__(self, dirname, scale_from, scale_to):
+    def __init__(self, 
+                 dirname, 
+                 data_from, data_to, 
+                 scale_diff):
         super(TestDataset, self).__init__()
 
         self.name  = dirname.split("/")[-1]
-        hr_str = "HR" if scale_to == 1 else "X{}".format(scale_to)
-        lr_str = "X{}".format(scale_from)
-        self.scale_diff = int(scale_from/scale_to)
+        self.scale_diff = scale_diff
 
-        if "DIV" in dirname:
-            self.hr = glob.glob(os.path.join("{}/{}/*.png".format(dirname, hr_str)))
-            self.lr = glob.glob(os.path.join("{}/{}/*.png".format(dirname, lr_str)))
-        else:
-            raise NotImplementedError()
-            """
-            all_files = glob.glob(os.path.join(dirname, "x{}/*.png".format(scale)))
-            self.hr = [name for name in all_files if "HR" in name]
-            self.lr = [name for name in all_files if "LR" in name]
-            """
+        self.im_from = glob.glob(os.path.join("{}/{}/*.png".format(dirname, data_from)))
+        self.im_to   = glob.glob(os.path.join("{}/{}/*.png".format(dirname, data_to)))
 
-        self.hr.sort()
-        self.lr.sort()
+        self.im_from.sort()
+        self.im_to.sort()
 
         self.transform = transforms.Compose([
             transforms.ToTensor()
         ])
 
     def __getitem__(self, index):
-        hr = Image.open(self.hr[index])
-        lr = Image.open(self.lr[index])
+        im_from = Image.open(self.im_from[index])
+        im_to   = Image.open(self.im_to[index])
 
-        hr = hr.convert("RGB")
-        lr = lr.convert("RGB")
-        filename = self.hr[index].split("/")[-1]
+        im_from = im_from.convert("RGB")
+        im_to   = im_to.convert("RGB")
+        filename = self.im_from[index].split("/")[-1]
 
-        return self.transform(hr), self.transform(lr), filename
+        return self.transform(im_from), self.transform(im_to), filename
 
     def __len__(self):
-        return len(self.hr)
+        return len(self.im_from)

@@ -11,9 +11,11 @@ class Block(nn.Module):
         self.b1 = ops.ResidualBlock(64, 64, act=act)
         self.b2 = ops.ResidualBlock(64, 64, act=act)
         self.b3 = ops.ResidualBlock(64, 64, act=act)
+        self.b4 = ops.ResidualBlock(64, 64, act=act)
         self.c1 = ops.BasicBlock(64*2, 64, 1, act=act)
         self.c2 = ops.BasicBlock(64*3, 64, 1, act=act)
         self.c3 = ops.BasicBlock(64*4, 64, 1, act=act)
+        self.c4 = ops.BasicBlock(64*5, 64, 1, act=act)
 
     def forward(self, x):
         c0 = o0 = x
@@ -29,8 +31,12 @@ class Block(nn.Module):
         b3 = self.b3(o2)
         c3 = torch.cat([c2, b3], dim=1)
         o3 = self.c3(c3)
+        
+        b4 = self.b4(o3)
+        c4 = torch.cat([c3, b4], dim=1)
+        o4 = self.c4(c4)
 
-        return o3
+        return o4
         
 
 class Net(nn.Module):
@@ -51,9 +57,11 @@ class Net(nn.Module):
         self.b1 = Block(64, 64, act=act)
         self.b2 = Block(64, 64, act=act)
         self.b3 = Block(64, 64, act=act)
+        self.b4 = Block(64, 64, act=act)
         self.c1 = ops.BasicBlock(64*2, 64, 1, act=act)
         self.c2 = ops.BasicBlock(64*3, 64, 1, act=act)
         self.c3 = ops.BasicBlock(64*4, 64, 1, act=act)
+        self.c4 = ops.BasicBlock(64*5, 64, 1, act=act)
         
         self.upsample = ops.UpsampleBlock(64, scale=scale_diff, act=act)
         self.exit = nn.Conv2d(64, 3, 3, 1, 1)
@@ -75,7 +83,11 @@ class Net(nn.Module):
         c3 = torch.cat([c2, b3], dim=1)
         o3 = self.c3(c3)
 
-        out = self.upsample(o3)
+        b4 = self.b4(o3)
+        c4 = torch.cat([c3, b4], dim=1)
+        o4 = self.c4(c4)
+
+        out = self.upsample(o4)
 
         out = self.exit(out)
         out = self.add_mean(out)
