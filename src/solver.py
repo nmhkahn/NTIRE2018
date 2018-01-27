@@ -20,9 +20,12 @@ class Solver():
         self.path_to   = cfg.path_to
         self.data_from = cfg.data_from
         self.data_to   = cfg.data_to
-
+        
         self.scale_from = [int(s) for s in self.data_from if s.isdigit()][0]
-        self.scale_to   = [int(s) for s in self.data_to if s.isdigit()][0]
+        if self.data_to == "HR":
+            self.scale_to = 1
+        else:
+            self.scale_to   = [int(s) for s in self.data_to if s.isdigit()][0]
         self.scale_diff = int(self.scale_from/self.scale_to)
         
         self.refiner = model(scale_from=self.scale_from, 
