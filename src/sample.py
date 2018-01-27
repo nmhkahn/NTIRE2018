@@ -36,6 +36,7 @@ def save_image(tensor, filename):
 
 def sample(net, dataset, cfg):
     scale_diff = cfg.scale_diff
+    mean_runtime = 0
     for step, (lr, hr, name) in enumerate(dataset):
         t1 = time.time()
         h, w = lr.size()[1:]
@@ -74,8 +75,11 @@ def sample(net, dataset, cfg):
             
         sr_im_path = os.path.join(sr_dir, "{}".format(name))
         save_image(sr, sr_im_path)
+        mean_runtime += (t2-t1) / len(dataset)
         print("Saved {} ({}x{} -> {}x{}, {:.3f}s)"
             .format(sr_im_path, lr.shape[1], lr.shape[2], sr.shape[1], sr.shape[2], t2-t1))
+
+    print("Mean runtime: {:.3f}s".format(mean_runtime))
 
 
 def main(cfg):
