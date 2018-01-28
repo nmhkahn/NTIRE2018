@@ -68,7 +68,7 @@ def sample(net, dataset, cfg):
         name_to   = cfg.data_to.split("_")[-1]
         sr_dir = os.path.join(cfg.sample_dir,
                               model_name, 
-                              "{}->{}".format(name_from, name_to))
+                              "{}-{}".format(name_from, name_to))
         
         if not os.path.exists(sr_dir):
             os.makedirs(sr_dir)
