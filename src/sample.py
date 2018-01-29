@@ -37,7 +37,7 @@ def save_image(tensor, filename):
 def sample(net, dataset, cfg):
     scale_diff = cfg.scale_diff
     mean_runtime = 0
-    for step, (lr, hr, name) in enumerate(dataset):
+    for step, (lr, name) in enumerate(dataset):
         t1 = time.time()
         h, w = lr.size()[1:]
         h_half, w_half = int(h/2), int(w/2)
@@ -107,7 +107,7 @@ def main(cfg):
     net.cuda()
 
     dataset = TestDataset(cfg.dirname,
-                          cfg.data_from, cfg.data_to,
+                          cfg.data_from,
                           cfg.scale_diff)
     sample(net, dataset, cfg)
  

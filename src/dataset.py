@@ -73,7 +73,7 @@ class TrainDataset(data.Dataset):
 class TestDataset(data.Dataset):
     def __init__(self, 
                  dirname, 
-                 data_from, data_to, 
+                 data_from, 
                  scale_diff):
         super(TestDataset, self).__init__()
 
@@ -81,10 +81,7 @@ class TestDataset(data.Dataset):
         self.scale_diff = scale_diff
 
         self.im_from = glob.glob(os.path.join("{}/{}/*.png".format(dirname, data_from)))
-        self.im_to   = glob.glob(os.path.join("{}/{}/*.png".format(dirname, data_to)))
-
         self.im_from.sort()
-        self.im_to.sort()
 
         self.transform = transforms.Compose([
             transforms.ToTensor()
@@ -92,13 +89,11 @@ class TestDataset(data.Dataset):
 
     def __getitem__(self, index):
         im_from = Image.open(self.im_from[index])
-        im_to   = Image.open(self.im_to[index])
 
         im_from = im_from.convert("RGB")
-        im_to   = im_to.convert("RGB")
         filename = self.im_from[index].split("/")[-1]
 
-        return self.transform(im_from), self.transform(im_to), filename
+        return self.transform(im_from), filename
 
     def __len__(self):
         return len(self.im_from)
