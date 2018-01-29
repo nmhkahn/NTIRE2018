@@ -52,7 +52,7 @@ def sample(net, dataset, cfg):
        
         sr = torch.FloatTensor(4, 3, h_chop*scale_diff, w_chop*scale_diff)
         for i, patch in enumerate(lr_patch):
-            sr[i] = net(patch.unsqueeze(0)).data
+            sr[i] = net(patch.unsqueeze(0))[0].data
             
         h, h_half, h_chop = h*scale_diff, h_half*scale_diff, h_chop*scale_diff
         w, w_half, w_chop = w*scale_diff, w_half*scale_diff, w_chop*scale_diff
@@ -89,14 +89,13 @@ def main(cfg):
     if "HR" in cfg.data_to:
         cfg.scale_to = 1
     else:
-        cfg.scale_to   = [int(s) for s in cfg.data_to if s.isdigit()][-1]
+        cfg.scale_to = [int(s) for s in cfg.data_to if s.isdigit()][-1]
     cfg.scale_diff = int(cfg.scale_from/cfg.scale_to)
+    print(json.dumps(vars(cfg), indent=4, sort_keys=True))
     
     module = importlib.import_module("model.{}".format(cfg.model))
-    net = module.Net(scale_from=cfg.scale_from,
-                     scale_to=cfg.scale_to,
-                     act=cfg.act)
-    print(json.dumps(vars(cfg), indent=4, sort_keys=True))
+    net = module.Net()
+    net.eval()
     
     state_dict = torch.load(cfg.ckpt_path)
     new_state_dict = OrderedDict()

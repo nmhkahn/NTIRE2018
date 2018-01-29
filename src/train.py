@@ -10,14 +10,12 @@ def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", type=str)
     parser.add_argument("--ckpt_name", type=str)
-    
-    parser.add_argument("--path_from", type=str)
-    parser.add_argument("--path_to", type=str)
-    parser.add_argument("--data_from", type=str)
-    parser.add_argument("--data_to", type=str)
+    parser.add_argument("--data_path", type=str)
+    parser.add_argument('--data_names', nargs='+', type=str, required=True)
+    parser.add_argument('--scales', nargs='+', type=int, required=True)
 
     parser.add_argument("--ckpt_dir", type=str,
-                        default="checkpoint")
+                        default="checkpoint/")
     parser.add_argument("--sample_dir", type=str,
                         default="sample/")
     parser.add_argument("--print_every", type=int, default=10000)
@@ -27,7 +25,7 @@ def parse_args():
 
     parser.add_argument("--verbose", action="store_true", default="store_true")
 
-    parser.add_argument("--act", type=str, default="relu")
+    parser.add_argument("--loss", type=str, default="l1")
     parser.add_argument("--patch_size", type=int, default=48)
     parser.add_argument("--batch_size", type=int, default=64)
     parser.add_argument("--max_steps", type=int, default=200000)

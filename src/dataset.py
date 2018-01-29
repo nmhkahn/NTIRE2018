@@ -7,67 +7,78 @@ from PIL import Image
 import torch.utils.data as data
 import torchvision.transforms as transforms
 
-def random_crop(lr, hr, size, scale):
-    h, w = lr.shape[:-1]
+def random_crop(images, scales, size):
+    """
+    Args
+        images: Single image with different scale. zero-index element must be HR
+                and last-index must be final LR (e.g. 8x).
+        scales: Scale description of images args.
+        size:   Size of cropped LR image.
+    """
+    h, w = images[-1].shape[:-1]
     x = random.randint(0, w-size)
     y = random.randint(0, h-size)
+    
+    cimages = list()
+    for i, image in enumerate(images):
+        scale_diff = int(scales[-1]/scales[i])
+        hsize = size*scale_diff
+        hx, hy = x*scale_diff, y*scale_diff
 
-    hsize = size*scale
-    hx, hy = x*scale, y*scale
+        cimages.append(image[hy:hy+hsize, hx:hx+hsize].copy())
 
-    crop_lr = lr[y:y+size, x:x+size].copy()
-    crop_hr = hr[hy:hy+hsize, hx:hx+hsize].copy()
-
-    return crop_lr, crop_hr
+    return cimages
 
 
-def random_flip_and_rotate(im1, im2):
+def random_flip_and_rotate(images):
     if random.random() < 0.5:
-        im1 = np.flipud(im1)
-        im2 = np.flipud(im2)
+        for i, image in enumerate(images):
+            images[i] = np.flipud(image)
 
     if random.random() < 0.5:
-        im1 = np.fliplr(im1)
-        im2 = np.fliplr(im2)
+        for i, image in enumerate(images):
+            images[i] = np.fliplr(image)
 
     angle = random.choice([0, 1, 2, 3])
-    im1 = np.rot90(im1, angle)
-    im2 = np.rot90(im2, angle)
+    for i, image in enumerate(images):
+        images[i] = np.rot90(image, angle)
 
     # have to copy before be called by transform function
-    return im1.copy(), im2.copy()
+    new_image = list()
+    for image in images:
+        new_image.append(image.copy())
+    return new_image
 
 
 class TrainDataset(data.Dataset):
     def __init__(self, 
-                 path_from, path_to, 
-                 data_from, data_to, 
-                 scale_diff, size):
+                 path, 
+                 data_names, 
+                 scales, size):
         super(TrainDataset, self).__init__()
 
         self.size = size
-        self.scale_diff = scale_diff
-        f_from = h5py.File(path_from, "r")
-        f_to   = h5py.File(path_to, "r")
+        self.scales = scales
+        self.data = list()
         
-        self.im_from = [v[:] for v in f_from[data_from].values()]
-        self.im_to   = [v[:] for v in f_to[data_to].values()]
-        
-        f_from.close(); f_to.close()
+        f = h5py.File(path, "r")
+        for name in data_names:
+            self.data.append([v[:] for v in f[name].values()])
+        f.close()
 
         self.transform = transforms.Compose([
             transforms.ToTensor()
         ])
 
     def __getitem__(self, index):
-        im_from, im_to = self.im_from[index], self.im_to[index]
-        im_from, im_to = random_crop(im_from, im_to, self.size, self.scale_diff)
-        im_from, im_to = random_flip_and_rotate(im_from, im_to)
+        images = [d[index] for d in self.data]
+        images = random_crop(images, self.scales, self.size)
+        images = random_flip_and_rotate(images)
         
-        return self.transform(im_from), self.transform(im_to)
+        return [self.transform(image) for image in images]
 
     def __len__(self):
-        return len(self.im_to)
+        return len(self.data[0])
         
 
 class TestDataset(data.Dataset):

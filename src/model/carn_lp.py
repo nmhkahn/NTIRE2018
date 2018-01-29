@@ -51,33 +51,23 @@ class Block(nn.Module):
         b6 = self.b6(o5)
         c6 = torch.cat([c5, b6], dim=1)
         o6 = self.c6(c6)
-        
+
         b7 = self.b7(o6)
         c7 = torch.cat([c6, b7], dim=1)
         o7 = self.c7(c7)
-        
+
         b8 = self.b8(o7)
         c8 = torch.cat([c7, b8], dim=1)
         o8 = self.c8(c8)
 
-        return o8
+        return o6
         
 
-class Net(nn.Module):
+class CARN(nn.Module):
     def __init__(self, **kwargs):
-        super(Net, self).__init__()
+        super(CARN, self).__init__()
         
-        act = kwargs.get("act")
-        scale_from = kwargs.get("scale_from")
-        scale_to = kwargs.get("scale_to")
-        scale_diff = int(scale_from/scale_to)
-
-        self.sub_mean = ops.MeanShift((0.4488, 0.4371, 0.4040), sub=True)
-        self.add_mean = ops.MeanShift((0.4488, 0.4371, 0.4040), sub=False)
-
-        self.relu = nn.ReLU()
-        self.entry = nn.Conv2d(3, 64, 3, 1, 1)
-
+        act = nn.ReLU()
         self.b1 = Block(64, 64, act=act)
         self.b2 = Block(64, 64, act=act)
         self.b3 = Block(64, 64, act=act)
@@ -87,12 +77,9 @@ class Net(nn.Module):
         self.c3 = ops.BasicBlock(64*4, 64, 1, act=act)
         self.c4 = ops.BasicBlock(64*5, 64, 1, act=act)
         
-        self.upsample = ops.UpsampleBlock(64, scale=scale_diff, act=act)
-        self.exit = nn.Conv2d(64, 3, 3, 1, 1)
+        self.upsample = ops.UpsampleBlock(64, scale=2, act=act)
                 
     def forward(self, x):
-        x = self.sub_mean(x)
-        x = self.entry(x)
         c0 = o0 = x
 
         b1 = self.b1(o0)
@@ -112,8 +99,51 @@ class Net(nn.Module):
         o4 = self.c4(c4)
 
         out = self.upsample(o4)
-
-        out = self.exit(out)
-        out = self.add_mean(out)
-
         return out
+
+
+class Net(nn.Module):
+    def __init__(self, **kwargs):
+        super(Net, self).__init__()
+        
+        self.sub_mean = ops.MeanShift((0.4488, 0.4371, 0.4040), sub=True)
+        self.add_mean = ops.MeanShift((0.4488, 0.4371, 0.4040), sub=False)
+        self.entry = nn.Conv2d(3, 64, 3, 1, 1)
+
+        # x8 -> x4
+        self.n1 = CARN(**kwargs)
+        self.u1 = ops.UpsampleBlock(3, scale=2)
+        self.r1 = nn.Conv2d(64, 3, 3, 1, 1)
+        # x4 -> x2
+        self.n2 = CARN(**kwargs)
+        self.u2 = ops.UpsampleBlock(3, scale=2)
+        self.r2 = nn.Conv2d(64, 3, 3, 1, 1)
+        # x2 -> x1
+        self.n3 = CARN(**kwargs)
+        self.u3 = ops.UpsampleBlock(3, scale=2)
+        self.r3 = nn.Conv2d(64, 3, 3, 1, 1)
+
+    def forward(self, x):
+        x = self.sub_mean(x)
+        entry = self.entry(x)
+    
+        n1 = self.n1(entry)
+        u1 = self.u1(x)
+        r1 = self.r1(n1)
+        x4 = u1 + r1
+
+        n2 = self.n2(n1)
+        u2 = self.u2(x4)
+        r2 = self.r2(n2)
+        x2 = u2 + r2
+
+        n3 = self.n3(n2)
+        u3 = self.u3(x2)
+        r3 = self.r3(n3)
+        x1 = u3 + r3
+
+        out_x1 = self.add_mean(x1)
+        out_x2 = self.add_mean(x2)
+        out_x4 = self.add_mean(x4)
+        return out_x1, out_x2, out_x4
+        
