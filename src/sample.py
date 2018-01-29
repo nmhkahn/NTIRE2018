@@ -49,8 +49,10 @@ def sample(net, dataset, cfg):
         lr_patch[2].copy_(lr[:, h-h_chop:h, 0:w_chop])
         lr_patch[3].copy_(lr[:, h-h_chop:h, w-w_chop:w])
         lr_patch = Variable(lr_patch, volatile=True).cuda()
-            
-        sr = net(lr_patch).data
+       
+        sr = torch.FloatTensor(4, 3, h_chop*scale_diff, w_chop*scale_diff)
+        for i, patch in enumerate(lr_patch):
+            sr[i] = net(patch.unsqueeze(0)).data
             
         h, h_half, h_chop = h*scale_diff, h_half*scale_diff, h_chop*scale_diff
         w, w_half, w_chop = w*scale_diff, w_half*scale_diff, w_chop*scale_diff
