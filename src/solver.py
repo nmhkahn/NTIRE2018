@@ -21,8 +21,8 @@ class Solver():
         self.scales = cfg.scales
         
         self.refiner = model().cuda()
-        # self.loss_fn = nn.L1Loss().cuda()
-        self.loss_fn = ops.CharbonnierLoss().cuda()
+        self.loss_fn = nn.L1Loss().cuda()
+        # self.loss_fn = ops.CharbonnierLoss().cuda()
 
         self.optim = optim.Adam(
             filter(lambda p: p.requires_grad, self.refiner.parameters()), 
@@ -57,8 +57,8 @@ class Solver():
                 outputs = refiner(data[-1])
                 
                 loss = self.loss_fn(outputs[0], data[0]) + \
-                       self.loss_fn(outputs[1], data[1]) + \
-                       self.loss_fn(outputs[2], data[2])
+                       0.5*self.loss_fn(outputs[1], data[1]) + \
+                       0.5*self.loss_fn(outputs[2], data[2])
                 
                 self.optim.zero_grad()
                 loss.backward()
