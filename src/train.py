@@ -33,6 +33,10 @@ def parse_args():
     parser.add_argument("--lr", type=float, default=0.0001)
     parser.add_argument("--clip", type=float, default=10.0)
 
+    parser.add_argument("--test_dirname", type=str)
+    parser.add_argument("--test_data_from", type=str)
+    parser.add_argument("--test_data_to", type=str)
+
     return parser.parse_args()
 
 def main(cfg):

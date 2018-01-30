@@ -40,14 +40,7 @@ def parse_args():
     return parser.parse_args()
 
 
-def save_image(tensor, filename):
-    tensor = tensor.cpu()
-    ndarr = tensor.mul(255).clamp(0, 255).byte().permute(1, 2, 0).numpy()
-    im = Image.fromarray(ndarr)
-    im.save(filename)
-
-
-def sample(net, dataset, cfg):
+def evaluate(net, dataset, cfg):
     mean_runtime = 0
     mean_psnr = 0
     scale_diff = cfg.scale_diff
@@ -88,13 +81,10 @@ def sample(net, dataset, cfg):
         im1 = hr[bnd:-bnd, bnd:-bnd]
         im2 = sr[bnd:-bnd, bnd:-bnd]
 
-        curr_psnr = psnr(im1, im2)
-        mean_psnr += curr_psnr / len(dataset)
+        mean_psnr += psnr(im1, im2) / len(dataset)
         mean_runtime += (t2-t1) / len(dataset)
-        print("{} PSNR:{:2f} {:.3f}s)"
-            .format(name, curr_psnr, t2-t1))
 
-    print("Mean runtime: {:.3f}s mean PSNR: {:.2f}".format(mean_runtime, mean_psnr))
+        return mean_runtime, mean_psnr
 
 
 def main(cfg):
@@ -125,7 +115,9 @@ def main(cfg):
                           cfg.scale_diff,
                           cfg.data_from,
                           cfg.data_to)
-    sample(net, dataset, cfg)
+
+    mean_runtime, mean_psnr = evaluate(net, dataset, cfg)
+    print("Mean runtime: {:.3f}s mean PSNR: {:.2f}".format(mean_runtime, mean_psnr))
  
 
 if __name__ == "__main__":

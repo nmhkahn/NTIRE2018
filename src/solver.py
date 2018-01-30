@@ -8,6 +8,7 @@ from torch.autograd import Variable
 from torch.utils.data import DataLoader
 
 import model.ops as ops
+from evaluate import evaluate
 from dataset import TrainDataset, TestDataset
 
 class Solver():
@@ -70,17 +71,28 @@ class Solver():
 
                 self.step += 1
                 if cfg.verbose and self.step % cfg.print_every == 0:
+                    psnr = self.eval()
                     t2 = time.time()
                     remain_step = cfg.max_steps - self.step
                     eta = (t2-t1)*remain_step/cfg.print_every/3600
-                    print("[{}K/{}K] {:.5f} ETA: {:.1f} hours".
-                          format(int(self.step/1000), int(cfg.max_steps/1000), loss.data[0], eta))
+                    print("[{}K/{}K] {:.3f} ETA: {:.1f} hours".
+                          format(int(self.step/1000), int(cfg.max_steps/1000), psnr, eta))
                             
                     t1 = time.time()
                     self.save(cfg.ckpt_dir, cfg.ckpt_name)
 
             if self.step > cfg.max_steps: break
 
+
+    def eval(self):
+        cfg = self.cfg
+        cfg.scale_diff = int(cfg.scales[-1]/cfg.scales[0])
+        dataset = TestDataset(cfg.test_dirname,
+                              cfg.scale_diff,
+                              cfg.test_data_from,
+                              cfg.test_data_to)
+        _, mean_psnr = evaluate(self.refiner, dataset, cfg)
+        return mean_psnr
     
     def load(self, path):
         self.refiner.load_state_dict(torch.load(path))
