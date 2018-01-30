@@ -84,7 +84,7 @@ def evaluate(net, dataset, cfg):
         mean_psnr += psnr(im1, im2) / len(dataset)
         mean_runtime += (t2-t1) / len(dataset)
 
-        return mean_runtime, mean_psnr
+    return mean_runtime, mean_psnr
 
 
 def main(cfg):
