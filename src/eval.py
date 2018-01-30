@@ -66,7 +66,7 @@ def sample(net, dataset, cfg):
        
         sr = torch.FloatTensor(4, 3, h_chop*scale_diff, w_chop*scale_diff)
         for i, patch in enumerate(lr_patch):
-            sr[i] = net(patch.unsqueeze(0)).data
+            sr[i] = net(patch.unsqueeze(0))[0].data
             
         h, h_half, h_chop = h*scale_diff, h_half*scale_diff, h_chop*scale_diff
         w, w_half, w_chop = w*scale_diff, w_half*scale_diff, w_chop*scale_diff

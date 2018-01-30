@@ -35,7 +35,7 @@ class Block(nn.Module):
         b4 = self.b4(o3)
         c4 = torch.cat([c3, b4], dim=1)
         o4 = self.c4(c4)
-        
+       
         return o4
         
 
@@ -48,18 +48,10 @@ class CARN(nn.Module):
         self.b2 = Block(64, 64, act=act)
         self.b3 = Block(64, 64, act=act)
         self.b4 = Block(64, 64, act=act)
-        self.b5 = Block(64, 64, act=act)
-        self.b6 = Block(64, 64, act=act)
-        self.b7 = Block(64, 64, act=act)
-        self.b8 = Block(64, 64, act=act)
         self.c1 = ops.BasicBlock(64*2, 64, 1, act=act)
         self.c2 = ops.BasicBlock(64*3, 64, 1, act=act)
         self.c3 = ops.BasicBlock(64*4, 64, 1, act=act)
         self.c4 = ops.BasicBlock(64*5, 64, 1, act=act)
-        self.c5 = ops.BasicBlock(64*6, 64, 1, act=act)
-        self.c6 = ops.BasicBlock(64*7, 64, 1, act=act)
-        self.c7 = ops.BasicBlock(64*8, 64, 1, act=act)
-        self.c8 = ops.BasicBlock(64*9, 64, 1, act=act)
         
         self.upsample = ops.UpsampleBlock(64, scale=2, act=act)
                 
@@ -82,23 +74,7 @@ class CARN(nn.Module):
         c4 = torch.cat([c3, b4], dim=1)
         o4 = self.c4(c4)
 
-        b5 = self.b5(o4)
-        c5 = torch.cat([c4, b5], dim=1)
-        o5 = self.c5(c5)
-
-        b6 = self.b6(o5)
-        c6 = torch.cat([c5, b6], dim=1)
-        o6 = self.c6(c6)
-
-        b7 = self.b7(o6)
-        c7 = torch.cat([c6, b7], dim=1)
-        o7 = self.c7(c7)
-        
-        b8 = self.b8(o7)
-        c8 = torch.cat([c7, b8], dim=1)
-        o8 = self.c8(c8)
-
-        out = self.upsample(o8)
+        out = self.upsample(o4)
         return out
 
 
