@@ -98,6 +98,13 @@ class Net(nn.Module):
         self.n3 = CARN(**kwargs)
         self.u3 = ops.UpsampleBlock(3, scale=2)
         self.r3 = nn.Conv2d(64, 3, 3, 1, 1)
+        
+        for m in self.modules():
+            if isinstance(m, nn.Conv2d):
+                n = 9 * m.out_channels
+                m.weight.data.normal_(0, math.sqrt(2. / n))
+                if m.bias is not None:
+                    m.bias.data.zero_()
 
     def forward(self, x):
         entry = self.entry(x)
