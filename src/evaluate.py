@@ -3,14 +3,16 @@ import json
 import time
 import importlib
 import argparse
+import scipy.misc as misc
 import numpy as np
 import skimage.measure as measure
 from collections import OrderedDict
+from PIL import Image
+
 import torch
 import torch.nn as nn
 from torch.autograd import Variable
 from dataset import TestDataset
-from PIL import Image
 
 
 def psnr(im1, im2):
@@ -40,43 +42,59 @@ def parse_args():
     return parser.parse_args()
 
 
-def evaluate(net, dataset, cfg):
-    mean_runtime = 0
-    mean_psnr = 0
-    scale_diff = cfg.scale_diff
+def evaluate(net, dataset, chunk, stage, cfg):
+    scale_diff = 2*2**stage
+    mean_psnr, mean_runtime = 0, 0
     for step, (lr, hr, name) in enumerate(dataset):
         t1 = time.time()
         h, w = lr.size()[1:]
-        h_half, w_half = int(h/2), int(w/2)
-        h_chop, w_chop = h_half + cfg.shave, w_half + cfg.shave
+        h_chunk, w_chunk = int(h/chunk), int(w/chunk)
+        h_chop, w_chop   = h_chunk + cfg.shave, w_chunk + cfg.shave
 
-        lr_patch = torch.FloatTensor(4, 3, h_chop, w_chop)
-        lr_patch[0].copy_(lr[:, 0:h_chop, 0:w_chop])
-        lr_patch[1].copy_(lr[:, 0:h_chop, w-w_chop:w])
-        lr_patch[2].copy_(lr[:, h-h_chop:h, 0:w_chop])
-        lr_patch[3].copy_(lr[:, h-h_chop:h, w-w_chop:w])
+        lr_patch = torch.FloatTensor(chunk**2, 3, h_chop, w_chop)
+        for i in range(chunk):
+            for j in range(chunk):
+                h_from, h_to = i*h_chunk, (i+1)*h_chunk+cfg.shave
+                w_from, w_to = j*w_chunk, (j+1)*w_chunk+cfg.shave
+                if (i+1) == chunk: h_from, h_to = h-h_chop, h
+                if (j+1) == chunk: w_from, w_to = w-w_chop, w
+                lr_patch[i+j*chunk].copy_(lr[:, h_from:h_to, w_from:w_to])
         lr_patch = Variable(lr_patch, volatile=True).cuda()
        
-        sr = torch.FloatTensor(4, 3, h_chop*scale_diff, w_chop*scale_diff)
+        sr = torch.FloatTensor(chunk**2, 3, h_chop*scale_diff, w_chop*scale_diff)
         for i, patch in enumerate(lr_patch):
-            sr[i] = net(patch.unsqueeze(0))[0].data
-            
-        h, h_half, h_chop = h*scale_diff, h_half*scale_diff, h_chop*scale_diff
-        w, w_half, w_chop = w*scale_diff, w_half*scale_diff, w_chop*scale_diff
+            sr[i] = net(patch.unsqueeze(0), stage, 1).data
+           
+        h, h_chunk, h_chop = h*scale_diff, h_chunk*scale_diff, h_chop*scale_diff
+        w, w_chunk, w_chop = w*scale_diff, w_chunk*scale_diff, w_chop*scale_diff
 
         result = torch.FloatTensor(3, h, w).cuda()
-        result[:, 0:h_half, 0:w_half].copy_(sr[0, :, 0:h_half, 0:w_half])
-        result[:, 0:h_half, w_half:w].copy_(sr[1, :, 0:h_half, w_chop-w+w_half:w_chop])
-        result[:, h_half:h, 0:w_half].copy_(sr[2, :, h_chop-h+h_half:h_chop, 0:w_half])
-        result[:, h_half:h, w_half:w].copy_(sr[3, :, h_chop-h+h_half:h_chop, w_chop-w+w_half:w_chop])
+        for i in range(chunk):
+            for j in range(chunk):
+                h_from, h_to = 0, h_chunk
+                w_from, w_to = 0, w_chunk
+                hh_from, hh_to = i*h_chunk, (i+1)*h_chunk
+                ww_from, ww_to = j*w_chunk, (j+1)*w_chunk
+
+                if (i+1) == chunk: 
+                    h_from, h_to = -h_chunk-(h-(i+1)*h_chunk), None
+                    hh_from, hh_to = i*h_chunk, None
+                if (j+1) == chunk: 
+                    w_from, w_to = -w_chunk-(w-(j+1)*w_chunk), None
+                    ww_from, ww_to = j*w_chunk, None
+
+                result[:, hh_from:hh_to, ww_from:ww_to].copy_(sr[i+j*chunk, :, h_from:h_to, w_from:w_to])
         sr = result
         t2 = time.time()
         
         hr = hr.cpu().mul(255).clamp(0, 255).byte().permute(1, 2, 0).numpy()
         sr = sr.cpu().mul(255).clamp(0, 255).byte().permute(1, 2, 0).numpy()
 
+        # match resolution when stage is less then two
+        sr = misc.imresize(sr, 8/scale_diff)
+
         # crop HR to match SR
-        hr = hr[:h, :w]
+        hr = hr[:sr.shape[0], :sr.shape[1]]
         bnd = cfg.scale_diff + 6
         im1 = hr[bnd:-bnd, bnd:-bnd]
         im2 = sr[bnd:-bnd, bnd:-bnd]
@@ -116,7 +134,7 @@ def main(cfg):
                           cfg.data_from,
                           cfg.data_to)
 
-    mean_runtime, mean_psnr = evaluate(net, dataset, cfg)
+    mean_runtime, mean_psnr = evaluate(net, dataset, 4, 2, cfg)
     print("Mean runtime: {:.3f}s mean PSNR: {:.2f}".format(mean_runtime, mean_psnr))
  
 

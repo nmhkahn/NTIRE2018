@@ -1,5 +1,7 @@
+import math
 import torch
 import torch.nn as nn
+from torch.nn import functional as F
 import model.ops as ops
 
 class Block(nn.Module):
@@ -35,12 +37,12 @@ class Block(nn.Module):
         b4 = self.b4(o3)
         c4 = torch.cat([c3, b4], dim=1)
         o4 = self.c4(c4)
-        
+       
         return o4
         
 
 class CARN(nn.Module):
-    def __init__(self, **kwargs):
+    def __init__(self):
         super(CARN, self).__init__()
         
         act = nn.ReLU()
@@ -48,17 +50,13 @@ class CARN(nn.Module):
         self.b2 = Block(64, 64, act=act)
         self.b3 = Block(64, 64, act=act)
         self.b4 = Block(64, 64, act=act)
-        self.b5 = Block(64, 64, act=act)
-        self.b6 = Block(64, 64, act=act)
         self.c1 = ops.BasicBlock(64*2, 64, 1, act=act)
         self.c2 = ops.BasicBlock(64*3, 64, 1, act=act)
         self.c3 = ops.BasicBlock(64*4, 64, 1, act=act)
         self.c4 = ops.BasicBlock(64*5, 64, 1, act=act)
-        self.c5 = ops.BasicBlock(64*6, 64, 1, act=act)
-        self.c6 = ops.BasicBlock(64*7, 64, 1, act=act)
+            
+        self.up = ops.UpsampleBlock(64, scale=2)
         
-        self.upsample = ops.UpsampleBlock(64, scale=2, act=act)
-                
     def forward(self, x):
         c0 = o0 = x
 
@@ -78,61 +76,44 @@ class CARN(nn.Module):
         c4 = torch.cat([c3, b4], dim=1)
         o4 = self.c4(c4)
 
-        b5 = self.b5(o4)
-        c5 = torch.cat([c4, b5], dim=1)
-        o5 = self.c5(c5)
+        out = self.up(o4)
 
-        b6 = self.b6(o5)
-        c6 = torch.cat([c5, b6], dim=1)
-        o6 = self.c6(c6)
-
-        out = self.upsample(o6)
         return out
 
 
 class Net(nn.Module):
-    def __init__(self, **kwargs):
+    def __init__(self):
         super(Net, self).__init__()
+        self.entry = ops.BasicBlock(3, 64, 3, act=nn.ReLU())
+        self.progression = nn.ModuleList([
+            CARN(), # x8 -> x4
+            CARN(), # x4 -> x2
+            CARN(), # x2 -> x1
+        ])
         
-        self.entry = nn.Conv2d(3, 64, 3, 1, 1)
+        self.to_rgb = nn.ModuleList([
+            nn.Conv2d(64, 3, 3, 1, 1),
+            nn.Conv2d(64, 3, 3, 1, 1),
+            nn.Conv2d(64, 3, 3, 1, 1),
+        ])
 
-        # x8 -> x4
-        self.n1 = CARN(**kwargs)
-        self.u1 = ops.UpsampleBlock(3, scale=2)
-        self.r1 = nn.Conv2d(64, 3, 3, 1, 1)
-        # x4 -> x2
-        self.n2 = CARN(**kwargs)
-        self.u2 = ops.UpsampleBlock(3, scale=2)
-        self.r2 = nn.Conv2d(64, 3, 3, 1, 1)
-        # x2 -> x1
-        self.n3 = CARN(**kwargs)
-        self.u3 = ops.UpsampleBlock(3, scale=2)
-        self.r3 = nn.Conv2d(64, 3, 3, 1, 1)
-        
-        for m in self.modules():
-            if isinstance(m, nn.Conv2d):
-                n = 9 * m.out_channels
-                m.weight.data.normal_(0, math.sqrt(2. / n))
-                if m.bias is not None:
-                    m.bias.data.zero_()
+        self.history = list()
 
-    def forward(self, x):
-        entry = self.entry(x)
-    
-        n1 = self.n1(entry)
-        u1 = self.u1(x)
-        r1 = self.r1(n1)
-        x4 = u1 + r1
+    def forward(self, x, stage, alpha):
+        out = self.entry(x)
+        for i, (carn, to_rgb) in enumerate(zip(self.progression, self.to_rgb)):
+            out = carn(out)
+            self.history.append(out)
 
-        n2 = self.n2(n1)
-        u2 = self.u2(x4)
-        r2 = self.r2(n2)
-        x2 = u2 + r2
+            if i == stage:
+                out = to_rgb(out)
+                self.history[-1] = out + F.upsample(x, scale_factor=2*2**stage)
 
-        n3 = self.n3(n2)
-        u3 = self.u3(x2)
-        r3 = self.r3(n3)
-        x1 = u3 + r3
+                if i > 0 and 0 <= alpha < 1:
+                    skip_rgb = self.to_rgb[-2](self.history[-2])
+                    skip_rgb = F.upsample(skip_rgb, scale_factor=2)
+                    out = (1-alpha) * skip_rgb + alpha * out
 
-        return x1, x2, x4
-        
+                break
+
+        return out

@@ -10,18 +10,19 @@ import torchvision.transforms as transforms
 def random_crop(images, scales, size):
     """
     Args
-        images: Single image with different scale. zero-index element must be HR
-                and last-index must be final LR (e.g. 8x).
+        images: Single image with different scale. zero-index element must be LR
+                and last-index as HR.
         scales: Scale description of images args.
         size:   Size of cropped LR image.
     """
-    h, w = images[-1].shape[:-1]
+
+    h, w = images[0].shape[:-1]
     x = random.randint(0, w-size)
     y = random.randint(0, h-size)
     
     cimages = list()
     for i, image in enumerate(images):
-        scale_diff = int(scales[-1]/scales[i])
+        scale_diff = int(scales[0]/scales[i])
         hsize = size*scale_diff
         hx, hy = x*scale_diff, y*scale_diff
 
