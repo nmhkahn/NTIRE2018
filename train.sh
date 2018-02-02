@@ -1,14 +1,13 @@
-CUDA_VISIBLE_DEVICES=1 python src/train.py \
-                    --patch_size 16 \
-                    --batch_size 32 \
-                    --max_steps 300000 \
-                    --decay 20000 \
+python src/train.py \
+                    --patch_size 32 \
+                    --batch_size 64  16 8 \
+                    --max_steps 100000 200000 400000 \
                     --data_path dataset/DIV2K/div2k_train.h5 \
-                    --data_names HR x2 x4 x8 \
-                    --scale 1 2 4 8 \
-                    --model carn_lp2 \
-                    --ckpt_name carn_lp2 \
-                    --print_every 10 \
+                    --data_names x8 x4 x2 HR\
+                    --scale 8 4 2 1 \
+                    --model carn_prog \
+                    --ckpt_name carn_prog \
+                    --print_every 1000 \
                     --num_gpu 1 \
                     --test_dirname dataset/DIV2K/valid \
                     --test_data_from DIV2K_valid_LR_x8 \

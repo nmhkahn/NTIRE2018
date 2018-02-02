@@ -43,6 +43,7 @@ def parse_args():
 
 
 def evaluate(net, dataset, chunk, stage, cfg):
+    net.eval()
     scale_diff = 2*2**stage
     mean_psnr, mean_runtime = 0, 0
     for step, (lr, hr, name) in enumerate(dataset):
@@ -63,8 +64,10 @@ def evaluate(net, dataset, chunk, stage, cfg):
        
         sr = torch.FloatTensor(chunk**2, 3, h_chop*scale_diff, w_chop*scale_diff)
         for i, patch in enumerate(lr_patch):
-            sr[i] = net(patch.unsqueeze(0), stage, 1).data
-           
+            out = net(patch.unsqueeze(0), stage, 1)
+            sr[i] = out.data
+            del out
+
         h, h_chunk, h_chop = h*scale_diff, h_chunk*scale_diff, h_chop*scale_diff
         w, w_chunk, w_chop = w*scale_diff, w_chunk*scale_diff, w_chop*scale_diff
 

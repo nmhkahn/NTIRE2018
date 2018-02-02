@@ -97,23 +97,23 @@ class Net(nn.Module):
             nn.Conv2d(64, 3, 3, 1, 1),
         ])
 
-        self.history = list()
 
     def forward(self, x, stage, alpha):
+        history = list()
         out = self.entry(x)
         for i, (carn, to_rgb) in enumerate(zip(self.progression, self.to_rgb)):
             out = carn(out)
-            self.history.append(out)
+            history.append(out)
 
             if i == stage:
                 out = to_rgb(out)
-                self.history[-1] = out + F.upsample(x, scale_factor=2*2**stage)
+                history[-1] = out + F.upsample(x, scale_factor=2*2**stage)
 
                 if i > 0 and 0 <= alpha < 1:
-                    skip_rgb = self.to_rgb[-2](self.history[-2])
+                    skip_rgb = self.to_rgb[-2](history[-2])
                     skip_rgb = F.upsample(skip_rgb, scale_factor=2)
                     out = (1-alpha) * skip_rgb + alpha * out
 
                 break
-
+    
         return out

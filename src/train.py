@@ -11,9 +11,10 @@ def parse_args():
     parser.add_argument("--model", type=str)
     parser.add_argument("--ckpt_name", type=str)
     parser.add_argument("--data_path", type=str)
-    parser.add_argument('--data_names', nargs='+', type=str, required=True)
-    parser.add_argument('--scales', nargs='+', type=int, required=True)
+    parser.add_argument('--data_names', nargs="+", type=str, required=True)
+    parser.add_argument('--scales', nargs="+", type=int, required=True)
     parser.add_argument("--max_steps", nargs="+", type=int, required=True)
+    parser.add_argument("--batch_size", nargs="+", type=int, required=True)
 
     parser.add_argument("--ckpt_dir", type=str,
                         default="checkpoint/")
@@ -27,7 +28,6 @@ def parse_args():
     parser.add_argument("--verbose", action="store_true", default="store_true")
 
     parser.add_argument("--patch_size", type=int, default=48)
-    parser.add_argument("--batch_size", type=int, default=64)
     parser.add_argument("--lr", type=float, default=0.0001)
     parser.add_argument("--clip", type=float, default=10.0)
 

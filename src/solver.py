@@ -30,10 +30,7 @@ class Solver():
                                        self.data_names,
                                        self.scales,
                                        size=cfg.patch_size)
-        self.train_loader = DataLoader(self.train_data,
-                                       batch_size=cfg.batch_size,
-                                       num_workers=1,
-                                       shuffle=True, drop_last=True)
+        
         
         if cfg.verbose:
             num_params = 0
@@ -51,15 +48,21 @@ class Solver():
         
         for stage in range(self.max_stage):
             self.stage = stage
-            self._fit_stage()
+            loader = DataLoader(self.train_data,
+                                batch_size=cfg.batch_size[stage],
+                                num_workers=1,
+                                shuffle=True, drop_last=True)
+            self._fit_stage(loader)
+
+            # reset step for next stage
             self.step = 0
-                
-    def _fit_stage(self):
+            
+    def _fit_stage(self, loader):
         cfg = self.cfg
         stage = self.stage
 
         while True:
-            for data in self.train_loader:
+            for data in loader:
                 self.refiner.train()
 
                 data = [Variable(d, requires_grad=False).cuda() for d in data]
