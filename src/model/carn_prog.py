@@ -107,13 +107,7 @@ class Net(nn.Module):
 
             if i == stage:
                 out = to_rgb(out)
-                history[-1] = out + F.upsample(x, scale_factor=2*2**stage)
-
-                if i > 0 and 0 <= alpha < 1:
-                    skip_rgb = self.to_rgb[-2](history[-2])
-                    skip_rgb = F.upsample(skip_rgb, scale_factor=2)
-                    out = (1-alpha) * skip_rgb + alpha * out
-
+                out += F.upsample(x, scale_factor=2*2**stage)
                 break
     
         return out

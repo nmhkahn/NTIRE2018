@@ -28,7 +28,7 @@ def parse_args():
     parser.add_argument("--verbose", action="store_true", default="store_true")
 
     parser.add_argument("--patch_size", type=int, default=48)
-    parser.add_argument("--lr", type=float, default=0.0001)
+    parser.add_argument("--lr", type=float, default=0.001)
     parser.add_argument("--clip", type=float, default=10.0)
 
     parser.add_argument("--test_dirname", type=str)

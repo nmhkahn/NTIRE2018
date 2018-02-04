@@ -4,6 +4,7 @@ import time
 import importlib
 import argparse
 import numpy as np
+import scipy.misc as misc
 from collections import OrderedDict
 import torch
 import torch.nn as nn
@@ -23,14 +24,15 @@ def parse_args():
     parser.add_argument("--ckpt_path", type=str)
     parser.add_argument("--sample_dir", type=str)
     parser.add_argument("--shave", type=int, default=20)
+    
+    parser.add_argument("--chunk", type=int)
+    parser.add_argument("--stage", type=int)
 
     return parser.parse_args()
 
 
-def save_image(tensor, filename):
-    tensor = tensor.cpu()
-    ndarr = tensor.mul(255).clamp(0, 255).byte().permute(1, 2, 0).numpy()
-    im = Image.fromarray(ndarr)
+def save_image(arr, filename):
+    im = Image.fromarray(arr)
     im.save(filename)
 
 
@@ -78,7 +80,9 @@ def sample(net, dataset, chunk, stage, cfg):
 
                 result[:, hh_from:hh_to, ww_from:ww_to].copy_(
                     sr[i+j*chunk, :, h_from:h_to, w_from:w_to])
-        sr = result
+
+        sr = result.cpu().mul(255).clamp(0, 255).byte().permute(1, 2, 0).numpy()
+        sr = misc.imresize(sr, 8/scale_diff)
         t2 = time.time()
         
         model_name = cfg.ckpt_path.split(".")[0].split("/")[-1]
@@ -127,7 +131,7 @@ def main(cfg):
                           cfg.scale_diff,
                           cfg.data_from,
                           cfg.data_to)
-    sample(net, dataset, 4, 0, cfg)
+    sample(net, dataset, cfg.chunk, cfg.stage, cfg)
  
 
 if __name__ == "__main__":

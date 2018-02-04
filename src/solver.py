@@ -80,7 +80,7 @@ class Solver():
                 if cfg.verbose and (self.step+1) % cfg.print_every == 0:
                     psnr = self.eval(stage)
                     print("[Stage {}: {}K/{}K] {:.3f}".
-                          format(stage, int(self.step)+1, int(cfg.max_steps[stage]), psnr))
+                          format(stage, int((self.step+1)/1000), int(cfg.max_steps[stage]/1000), psnr))
                     self.save(cfg.ckpt_dir, cfg.ckpt_name)
             
                 if (self.step+1) == cfg.max_steps[stage]: return
@@ -92,7 +92,7 @@ class Solver():
                               cfg.scale_diff,
                               cfg.test_data_from,
                               cfg.test_data_to)
-        _, mean_psnr = evaluate(self.refiner, dataset, 4, stage, cfg)
+        _, mean_psnr = evaluate(self.refiner, dataset, 2, stage, cfg)
         return mean_psnr
     
     def load(self, path):
