@@ -4,6 +4,7 @@ import time
 import torch
 import torch.nn as nn
 import torch.optim as optim
+from collections import OrderedDict
 from torch.autograd import Variable
 from torch.utils.data import DataLoader
 
@@ -21,10 +22,11 @@ class Solver():
         
         self.refiner = model().cuda()
         self.loss_fn = nn.L1Loss().cuda()
-
-        self.optim = optim.Adam(
-            filter(lambda p: p.requires_grad, self.refiner.parameters()), 
-            cfg.lr)
+        
+        init_param = list(self.refiner.entry.parameters()) + \
+                     list(self.refiner.progression[0].parameters()) + \
+                     list(self.refiner.to_rgb[0].parameters())
+        self.optim = optim.Adam(init_param, cfg.lr)
         
         self.train_data = TrainDataset(self.data_path,
                                        self.data_names,
@@ -46,16 +48,25 @@ class Solver():
         cfg = self.cfg
         refiner = nn.DataParallel(self.refiner, device_ids=range(cfg.num_gpu))
         
-        for stage in range(self.max_stage):
+        for stage in range(self.stage, self.max_stage):
             self.stage = stage
             loader = DataLoader(self.train_data,
                                 batch_size=cfg.batch_size[stage],
                                 num_workers=1,
                                 shuffle=True, drop_last=True)
             self._fit_stage(loader)
-
+            
             # reset step for next stage
             self.step = 0
+            if (stage+1) == self.max_stage: break
+
+            # decay previous parameters and add new parameters to optim
+            for param_group in self.optim.param_groups:
+                param_group["lr"] = param_group["lr"] * 0.1
+
+            new_params = list(self.refiner.progression[stage+1].parameters()) + \
+                         list(self.refiner.to_rgb[stage+1].parameters())
+            self.optim.add_param_group({"params": new_params, "lr": cfg.lr})
             
     def _fit_stage(self, loader):
         cfg = self.cfg
@@ -67,8 +78,7 @@ class Solver():
 
                 data = [Variable(d, requires_grad=False).cuda() for d in data]
                 
-                alpha = min(1, 2*self.step/cfg.max_steps[stage])
-                output = self.refiner(data[0], stage, alpha)
+                output = self.refiner(data[0], stage)
                 loss = self.loss_fn(output, data[stage+1])
 
                 self.optim.zero_grad()
@@ -83,7 +93,7 @@ class Solver():
                           format(stage, int((self.step+1)/1000), int(cfg.max_steps[stage]/1000), psnr))
                     self.save(cfg.ckpt_dir, cfg.ckpt_name)
             
-                if (self.step+1) == cfg.max_steps[stage]: return
+                if (self.step+1) >= cfg.max_steps[stage]: return
 
     def eval(self, stage):
         cfg = self.cfg
@@ -96,15 +106,17 @@ class Solver():
         return mean_psnr
     
     def load(self, path):
-        self.refiner.load_state_dict(torch.load(path))
-        splited = path.split(".")[0].split("_")[-1]
-        try:
-            self.step = int(path.split(".")[0].split("_")[-1])
-        except ValueError:
-            self.step = 0
+        state_dict = torch.load(path)
+        new_state_dict = OrderedDict()
+        for k, v in state_dict.items():
+            name = k
+            # name = k[7:] # remove "module."
+            new_state_dict[name] = v
+        self.refiner.load_state_dict(new_state_dict)
+        
         print("Load pretrained {} model".format(path))
 
     def save(self, ckpt_dir, ckpt_name):
         save_path = os.path.join(
-            ckpt_dir, "{}_stage_{}_{}.pth".format(ckpt_name, self.stage, self.step))
+            ckpt_dir, "{}_stage_{}_{}.pth".format(ckpt_name, self.stage, self.step+1))
         torch.save(self.refiner.state_dict(), save_path)

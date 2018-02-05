@@ -20,6 +20,7 @@ def parse_args():
                         default="checkpoint/")
     parser.add_argument("--sample_dir", type=str,
                         default="sample/")
+    parser.add_argument("--load_path", type=str)
     parser.add_argument("--print_every", type=int, default=10000)
     
     parser.add_argument("--num_gpu", type=int, default=1)
@@ -28,7 +29,7 @@ def parse_args():
     parser.add_argument("--verbose", action="store_true", default="store_true")
 
     parser.add_argument("--patch_size", type=int, default=48)
-    parser.add_argument("--lr", type=float, default=0.001)
+    parser.add_argument("--lr", type=float, default=0.0001)
     parser.add_argument("--clip", type=float, default=10.0)
 
     parser.add_argument("--test_dirname", type=str)
@@ -43,6 +44,12 @@ def main(cfg):
     print(json.dumps(vars(cfg), indent=4, sort_keys=True))
     
     solver = Solver(net, cfg)
+    if cfg.load_path:
+        solver.load(cfg.load_path)
+        last_two = cfg.load_path.split(".")[0].split("_")[-2:]
+        solver.stage = int(last_two[0])
+        solver.step = int(last_two[1])
+        print("Resume training from stage {}, step {}".format(solver.stage, solver.step))
     solver.fit()
 
 if __name__ == "__main__":

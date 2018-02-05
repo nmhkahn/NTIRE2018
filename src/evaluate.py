@@ -30,14 +30,17 @@ def psnr(im1, im2):
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", type=str)
-    parser.add_argument("--act", type=str)
     
     parser.add_argument("--dirname", type=str)
     parser.add_argument("--data_from", type=str)
     parser.add_argument("--data_to", type=str)
     
     parser.add_argument("--ckpt_path", type=str)
+    parser.add_argument("--sample_dir", type=str)
     parser.add_argument("--shave", type=int, default=20)
+    
+    parser.add_argument("--chunk", type=int)
+    parser.add_argument("--stage", type=int)
 
     return parser.parse_args()
 
@@ -64,7 +67,7 @@ def evaluate(net, dataset, chunk, stage, cfg):
        
         sr = torch.FloatTensor(chunk**2, 3, h_chop*scale_diff, w_chop*scale_diff)
         for i, patch in enumerate(lr_patch):
-            out = net(patch.unsqueeze(0), stage, 1)
+            out = net(patch.unsqueeze(0), stage)
             sr[i] = out.data
             del out
 
@@ -117,9 +120,7 @@ def main(cfg):
     cfg.scale_diff = int(cfg.scale_from/cfg.scale_to)
     
     module = importlib.import_module("model.{}".format(cfg.model))
-    net = module.Net(scale_from=cfg.scale_from,
-                     scale_to=cfg.scale_to,
-                     act=cfg.act)
+    net = module.Net()
     print(json.dumps(vars(cfg), indent=4, sort_keys=True))
     
     state_dict = torch.load(cfg.ckpt_path)
@@ -137,7 +138,7 @@ def main(cfg):
                           cfg.data_from,
                           cfg.data_to)
 
-    mean_runtime, mean_psnr = evaluate(net, dataset, 4, 2, cfg)
+    mean_runtime, mean_psnr = evaluate(net, dataset, cfg.chunk, cfg.stage, cfg)
     print("Mean runtime: {:.3f}s mean PSNR: {:.2f}".format(mean_runtime, mean_psnr))
  
 

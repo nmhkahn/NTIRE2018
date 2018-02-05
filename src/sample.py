@@ -15,7 +15,6 @@ from PIL import Image
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", type=str)
-    parser.add_argument("--act", type=str)
     
     parser.add_argument("--dirname", type=str)
     parser.add_argument("--data_from", type=str)

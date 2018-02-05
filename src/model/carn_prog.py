@@ -98,13 +98,10 @@ class Net(nn.Module):
         ])
 
 
-    def forward(self, x, stage, alpha):
-        history = list()
+    def forward(self, x, stage):
         out = self.entry(x)
         for i, (carn, to_rgb) in enumerate(zip(self.progression, self.to_rgb)):
             out = carn(out)
-            history.append(out)
-
             if i == stage:
                 out = to_rgb(out)
                 out += F.upsample(x, scale_factor=2*2**stage)
