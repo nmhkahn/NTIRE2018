@@ -9,7 +9,7 @@ def main():
     f = h5py.File("div2k_train.h5", "w")
     dt = h5py.special_dtype(vlen=np.dtype('uint8'))
 
-    for subdir in ["HR", "LR_x2", "LR_x4", "LR_x8"]:
+    for subdir in ["HR", "LR_x2", "LR_x4", "LR_x8", "LR_x4m", "LR_x4d"]:
         im_paths = glob.glob(os.path.join("train/DIV2K_train_{}/*.png".format(subdir)))
         im_paths.sort()
         grp = f.create_group(subdir.split("_")[-1])

@@ -42,7 +42,7 @@ class Block(nn.Module):
         
 
 class CARN(nn.Module):
-    def __init__(self):
+    def __init__(self, do_upsample=True):
         super(CARN, self).__init__()
         
         act = nn.ReLU()
@@ -54,8 +54,10 @@ class CARN(nn.Module):
         self.c2 = ops.BasicBlock(64*3, 64, 1, act=act)
         self.c3 = ops.BasicBlock(64*4, 64, 1, act=act)
         self.c4 = ops.BasicBlock(64*5, 64, 1, act=act)
-            
-        self.up = ops.UpsampleBlock(64, scale=2)
+        
+        if do_upsample:
+            self.up = ops.UpsampleBlock(64, scale=2)
+        self.do_upsample = do_upsample
         
     def forward(self, x):
         c0 = o0 = x
@@ -75,20 +77,22 @@ class CARN(nn.Module):
         b4 = self.b4(o3)
         c4 = torch.cat([c3, b4], dim=1)
         o4 = self.c4(c4)
-
-        out = self.up(o4)
+        
+        out = o4
+        if self.do_upsample:
+            out = self.up(out)
 
         return out
 
 
 class Net(nn.Module):
-    def __init__(self):
+    def __init__(self, do_up_first=True):
         super(Net, self).__init__()
         self.entry = ops.BasicBlock(3, 64, 3, act=nn.ReLU())
         self.progression = nn.ModuleList([
-            CARN(), # x8 -> x4
-            CARN(), # x4 -> x2
-            CARN(), # x2 -> x1
+            CARN(do_up_first),
+            CARN(),
+            CARN()
         ])
         
         self.to_rgb = nn.ModuleList([
@@ -97,6 +101,7 @@ class Net(nn.Module):
             nn.Conv2d(64, 3, 3, 1, 1),
         ])
 
+        self.do_up_first = do_up_first
 
     def forward(self, x, stage):
         out = self.entry(x)
@@ -104,7 +109,12 @@ class Net(nn.Module):
             out = carn(out)
             if i == stage:
                 out = to_rgb(out)
-                out += F.upsample(x, scale_factor=2*2**stage)
+                if self.do_up_first:
+                    out += F.upsample(x, scale_factor=2*2**stage)
+                elif stage > 0:
+                    out += F.upsample(x, scale_factor=2*2**(stage-1))
+                else:
+                    out += x
                 break
     
         return out

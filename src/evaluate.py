@@ -47,7 +47,11 @@ def parse_args():
 
 def evaluate(net, dataset, chunk, stage, cfg):
     net.eval()
-    scale_diff = 2*2**stage
+
+    if cfg.scales[0] == cfg.scales[1]:
+        scale_diff = 1 if stage == 0 else 2*2**(stage-1)
+    else:
+        scale_diff = 2*2**stage
     mean_psnr, mean_runtime = 0, 0
     for step, (lr, hr, name) in enumerate(dataset):
         t1 = time.time()
@@ -97,11 +101,11 @@ def evaluate(net, dataset, chunk, stage, cfg):
         sr = sr.cpu().mul(255).clamp(0, 255).byte().permute(1, 2, 0).numpy()
 
         # match resolution when stage is less then two
-        sr = misc.imresize(sr, 8/scale_diff)
+        sr = misc.imresize(sr, cfg.scales[0]/scale_diff)
 
         # crop HR to match SR
         hr = hr[:sr.shape[0], :sr.shape[1]]
-        bnd = cfg.scale_diff + 6
+        bnd = int(cfg.scales[0]/cfg.scales[-1]) + 6
         im1 = hr[bnd:-bnd, bnd:-bnd]
         im2 = sr[bnd:-bnd, bnd:-bnd]
 

@@ -37,7 +37,12 @@ def save_image(arr, filename):
 
 def sample(net, dataset, chunk, stage, cfg):
     from torch.nn import functional as F
-    scale_diff = 2**(stage+1)
+    
+    if cfg.scale_from == 8:
+        scale_diff = 2*2**stage
+    else:
+        scale_diff = 1 if stage == 0 else 2*2**(stage-1)
+
     mean_psnr, mean_runtime = 0, 0
     for step, (lr, hr, name) in enumerate(dataset):
         t1 = time.time()
@@ -57,7 +62,7 @@ def sample(net, dataset, chunk, stage, cfg):
        
         sr = torch.FloatTensor(chunk**2, 3, h_chop*scale_diff, w_chop*scale_diff)
         for i, patch in enumerate(lr_patch):
-            sr[i] = net(patch.unsqueeze(0), stage, 1).data
+            sr[i] = net(patch.unsqueeze(0), stage).data
            
         h, h_chunk, h_chop = h*scale_diff, h_chunk*scale_diff, h_chop*scale_diff
         w, w_chunk, w_chop = w*scale_diff, w_chunk*scale_diff, w_chop*scale_diff
@@ -81,7 +86,8 @@ def sample(net, dataset, chunk, stage, cfg):
                     sr[i+j*chunk, :, h_from:h_to, w_from:w_to])
 
         sr = result.cpu().mul(255).clamp(0, 255).byte().permute(1, 2, 0).numpy()
-        sr = misc.imresize(sr, 8/scale_diff)
+        
+        sr = misc.imresize(sr, cfg.scale_from/scale_diff)
         t2 = time.time()
         
         model_name = cfg.ckpt_path.split(".")[0].split("/")[-1]
@@ -111,9 +117,11 @@ def main(cfg):
         cfg.scale_to = [int(s) for s in cfg.data_to if s.isdigit()][-1]
     cfg.scale_diff = int(cfg.scale_from/cfg.scale_to)
     print(json.dumps(vars(cfg), indent=4, sort_keys=True))
-    
+
     module = importlib.import_module("model.{}".format(cfg.model))
-    net = module.Net()
+
+    do_up_first = True if cfg.scale_from == 8 else False
+    net = module.Net(do_up_first)
     net.eval()
     
     state_dict = torch.load(cfg.ckpt_path)

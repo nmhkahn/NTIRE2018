@@ -19,8 +19,13 @@ class Solver():
         self.data_path = cfg.data_path
         self.data_names = cfg.data_names
         self.scales = cfg.scales
+
+        if self.scales[0] == self.scales[1]:
+            do_up_first = False
+        else:
+            do_up_first = True
         
-        self.refiner = model().cuda()
+        self.refiner = model(do_up_first).cuda()
         self.loss_fn = nn.L1Loss().cuda()
         
         init_param = list(self.refiner.entry.parameters()) + \
