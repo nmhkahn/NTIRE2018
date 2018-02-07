@@ -7,6 +7,7 @@ import torch.optim as optim
 from collections import OrderedDict
 from torch.autograd import Variable
 from torch.utils.data import DataLoader
+from tensorboardX import SummaryWriter
 
 import model.ops as ops
 from evaluate import evaluate
@@ -38,12 +39,12 @@ class Solver():
                                        self.scales,
                                        size=cfg.patch_size)
         
-        
-        if cfg.verbose:
-            num_params = 0
-            for param in self.refiner.parameters():
-                num_params += param.nelement()
-            print("# of params:", num_params)
+
+        self.writer = SummaryWriter()
+        num_params = 0
+        for param in self.refiner.parameters():
+            num_params += param.nelement()
+        print("# of params:", num_params)
             
         self.step = 0
         self.stage = 0
@@ -92,10 +93,15 @@ class Solver():
                 self.optim.step()
 
                 self.step += 1
-                if cfg.verbose and (self.step+1) % cfg.print_every == 0:
+                if (self.step+1) % cfg.print_every == 0:
                     psnr = self.eval(stage)
+                    global_step = self.step + sum(cfg.max_steps[:stage])
+                    
+                    self.writer.add_scalar("loss", loss.data[0], global_step)
+                    self.writer.add_scalar("psnr", psnr, global_step)
                     print("[Stage {}: {}K/{}K] {:.3f}".
                           format(stage, int((self.step+1)/1000), int(cfg.max_steps[stage]/1000), psnr))
+
                     self.save(cfg.ckpt_dir, cfg.ckpt_name)
             
                 if (self.step+1) >= cfg.max_steps[stage]: return
@@ -124,4 +130,9 @@ class Solver():
     def save(self, ckpt_dir, ckpt_name):
         save_path = os.path.join(
             ckpt_dir, "{}_stage_{}_{}.pth".format(ckpt_name, self.stage, self.step+1))
-        torch.save(self.refiner.state_dict(), save_path)
+
+        state = {
+            "state_dict": self.refiner.state_dict(),
+            "optimizer": self.optim.state_dict()
+        }
+        torch.save(state, save_path)
