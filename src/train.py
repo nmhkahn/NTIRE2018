@@ -4,7 +4,6 @@ sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 import json
 import argparse
 import importlib
-from solver import Solver
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -40,6 +39,11 @@ def main(cfg):
     # dynamic import using --model argument
     net = importlib.import_module("model.{}".format(cfg.model)).Net
     print(json.dumps(vars(cfg), indent=4, sort_keys=True))
+    
+    if cfg.model == "carn_prog":
+        from solver import Solver
+    else:
+        from solver_single import Solver
     
     solver = Solver(net, cfg)
     if cfg.load_path:

@@ -38,10 +38,7 @@ def save_image(arr, filename):
 def sample(net, dataset, chunk, stage, cfg):
     from torch.nn import functional as F
     
-    if cfg.scale_from == 8:
-        scale_diff = 2*2**stage
-    else:
-        scale_diff = 1 if stage == 0 else 2*2**(stage-1)
+    scale_diff = int(cfg.scales[0]/cfg.scales[stage+1])
 
     mean_psnr, mean_runtime = 0, 0
     for step, (lr, hr, name) in enumerate(dataset):
@@ -84,11 +81,13 @@ def sample(net, dataset, chunk, stage, cfg):
 
                 result[:, hh_from:hh_to, ww_from:ww_to].copy_(
                     sr[i+j*chunk, :, h_from:h_to, w_from:w_to])
+        t2 = time.time()
 
         sr = result.cpu().mul(255).clamp(0, 255).byte().permute(1, 2, 0).numpy()
         
-        sr = misc.imresize(sr, cfg.scale_from/scale_diff)
-        t2 = time.time()
+        # match resolution when stage is less then two
+        if int(cfg.scale_from/scale_diff) > 1:
+            sr = misc.imresize(sr, cfg.scale_from/scale_diff)
         
         model_name = cfg.ckpt_path.split(".")[0].split("/")[-1]
         name_from = cfg.data_from.split("_")[-1]

@@ -48,12 +48,7 @@ def parse_args():
 def evaluate(net, dataset, chunk, stage, cfg):
     net.eval()
 
-    if cfg.scales[0] == cfg.scales[1]:
-        scale_diff = 1 if stage == 0 else 2*2**(stage-1)
-    elif stage > 0:
-        scale_diff = 2*2**stage
-    else:
-        scale_diff = int(cfg.scales[0]/cfg.scales[1])
+    scale_diff = int(cfg.scales[0]/cfg.scales[stage+1])
 
     mean_psnr, mean_runtime = 0, 0
     for step, (lr, hr, name) in enumerate(dataset):
@@ -74,8 +69,7 @@ def evaluate(net, dataset, chunk, stage, cfg):
        
         sr = torch.FloatTensor(chunk**2, 3, h_chop*scale_diff, w_chop*scale_diff)
         for i, patch in enumerate(lr_patch):
-            out = net(patch.unsqueeze(0), stage)
-            sr[i] = out.data
+            sr[i] = net(patch.unsqueeze(0), stage).data
 
         h, h_chunk, h_chop = h*scale_diff, h_chunk*scale_diff, h_chop*scale_diff
         w, w_chunk, w_chop = w*scale_diff, w_chunk*scale_diff, w_chop*scale_diff
@@ -95,7 +89,8 @@ def evaluate(net, dataset, chunk, stage, cfg):
                     w_from, w_to = -w_chunk-(w-(j+1)*w_chunk), None
                     ww_from, ww_to = j*w_chunk, None
 
-                result[:, hh_from:hh_to, ww_from:ww_to].copy_(sr[i+j*chunk, :, h_from:h_to, w_from:w_to])
+                result[:, hh_from:hh_to, ww_from:ww_to].copy_(
+                    sr[i+j*chunk, :, h_from:h_to, w_from:w_to])
         sr = result
         t2 = time.time()
         

@@ -99,7 +99,7 @@ class Solver():
 
     def save(self, ckpt_dir, ckpt_name):
         save_path = os.path.join(
-            ckpt_dir, "{}_{}_{}.pth".format(ckpt_name, self.step+1))
+            ckpt_dir, "{}_{}.pth".format(ckpt_name, self.step+1))
 
         state = {
             "state_dict": self.refiner.state_dict(),
