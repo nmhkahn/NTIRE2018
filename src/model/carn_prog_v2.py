@@ -1,6 +1,7 @@
 import math
 import torch
 import torch.nn as nn
+from torch.nn import functional as F
 import model.ops as ops
 
 class Block(nn.Module):
@@ -40,9 +41,9 @@ class Block(nn.Module):
         return o4
         
 
-class Net(nn.Module):
-    def __init__(self, do_up_first=True, scale=8):
-        super(Net, self).__init__()
+class CARN(nn.Module):
+    def __init__(self, do_upsample=True):
+        super(CARN, self).__init__()
         
         act = nn.ReLU()
         self.b1 = Block(64, 64, act=act)
@@ -54,12 +55,11 @@ class Net(nn.Module):
         self.c3 = ops.BasicBlock(64*4, 64, 1, act=act)
         self.c4 = ops.BasicBlock(64*5, 64, 1, act=act)
         
-        self.entry = nn.Conv2d(3, 64, 3, 1, 1)
-        self.upsample = ops.UpsampleBlock(64, scale=scale, act=act)
-        self.exit = ops.BasicBlock(64, 3, 3, act=act)
-                
-    def forward(self, x, stage=0):
-        x = self.entry(x)
+        if do_upsample:
+            self.up = ops.UpsampleBlock(64, scale=2)
+        self.do_upsample = do_upsample
+        
+    def forward(self, x):
         c0 = o0 = x
 
         b1 = self.b1(o0)
@@ -77,7 +77,50 @@ class Net(nn.Module):
         b4 = self.b4(o3)
         c4 = torch.cat([c3, b4], dim=1)
         o4 = self.c4(c4)
+        
+        out = o4
+        if self.do_upsample:
+            out = self.up(out)
 
-        out = self.upsample(o4)
-        out = self.exit(out)
+        return out
+
+
+class Net(nn.Module):
+    def __init__(self, do_up_first=True):
+        super(Net, self).__init__()
+        self.entry = ops.BasicBlock(3, 64, 3, act=nn.ReLU())
+        self.progression = nn.ModuleList([
+            CARN(do_up_first),
+            CARN(),
+            CARN()
+        ])
+        
+        self.to_rgb = nn.ModuleList([
+            nn.Conv2d(64, 3, 3, 1, 1),
+            nn.Conv2d(64, 3, 3, 1, 1),
+            nn.Conv2d(64, 3, 3, 1, 1),
+        ])
+
+        self.do_up_first = do_up_first
+
+    def forward(self, x, stage):
+        out = self.entry(x)
+
+        history = list()
+        history.append(x)
+        for i, (carn, to_rgb) in enumerate(zip(self.progression, self.to_rgb)):
+            out = carn(out)
+            rgb = to_rgb(out)
+
+            if self.do_up_first or stage > 0:
+                rgb += F.upsample(history[-1], scale_factor=2)
+            else:
+                rgb += history[-1]
+
+            history.append(rgb)
+
+            if i == stage:
+                out = history[-1]
+                break
+    
         return out

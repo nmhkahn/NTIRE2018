@@ -50,8 +50,11 @@ def evaluate(net, dataset, chunk, stage, cfg):
 
     if cfg.scales[0] == cfg.scales[1]:
         scale_diff = 1 if stage == 0 else 2*2**(stage-1)
-    else:
+    elif stage > 0:
         scale_diff = 2*2**stage
+    else:
+        scale_diff = int(cfg.scales[0]/cfg.scales[1])
+
     mean_psnr, mean_runtime = 0, 0
     for step, (lr, hr, name) in enumerate(dataset):
         t1 = time.time()
@@ -73,7 +76,6 @@ def evaluate(net, dataset, chunk, stage, cfg):
         for i, patch in enumerate(lr_patch):
             out = net(patch.unsqueeze(0), stage)
             sr[i] = out.data
-            del out
 
         h, h_chunk, h_chop = h*scale_diff, h_chunk*scale_diff, h_chop*scale_diff
         w, w_chunk, w_chop = w*scale_diff, w_chunk*scale_diff, w_chop*scale_diff
@@ -101,7 +103,8 @@ def evaluate(net, dataset, chunk, stage, cfg):
         sr = sr.cpu().mul(255).clamp(0, 255).byte().permute(1, 2, 0).numpy()
 
         # match resolution when stage is less then two
-        sr = misc.imresize(sr, cfg.scales[0]/scale_diff)
+        if int(cfg.scales[0]/scale_diff) > 1:
+            sr = misc.imresize(sr, cfg.scales[0]/scale_diff)
 
         # crop HR to match SR
         hr = hr[:sr.shape[0], :sr.shape[1]]
