@@ -38,7 +38,7 @@ def save_image(arr, filename):
 def sample(net, dataset, chunk, stage, cfg):
     from torch.nn import functional as F
     
-    scale_diff = int(cfg.scales[0]/cfg.scales[stage+1])
+    scale_diff = int(cfg.scale_from/cfg.scale_to)
 
     mean_psnr, mean_runtime = 0, 0
     for step, (lr, hr, name) in enumerate(dataset):
@@ -85,10 +85,6 @@ def sample(net, dataset, chunk, stage, cfg):
 
         sr = result.cpu().mul(255).clamp(0, 255).byte().permute(1, 2, 0).numpy()
         
-        # match resolution when stage is less then two
-        if int(cfg.scale_from/scale_diff) > 1:
-            sr = misc.imresize(sr, cfg.scale_from/scale_diff)
-        
         model_name = cfg.ckpt_path.split(".")[0].split("/")[-1]
         name_from = cfg.data_from.split("_")[-1]
         name_to   = cfg.data_to.split("_")[-1]
@@ -103,7 +99,7 @@ def sample(net, dataset, chunk, stage, cfg):
         save_image(sr, sr_im_path)
         mean_runtime += (t2-t1) / len(dataset)
         print("Saved {} ({}x{} -> {}x{}, {:.3f}s)"
-            .format(sr_im_path, lr.shape[1], lr.shape[2], sr.shape[1], sr.shape[2], t2-t1))
+            .format(sr_im_path, lr.shape[1], lr.shape[2], sr.shape[0], sr.shape[1], t2-t1))
 
     print("Mean runtime: {:.3f}s".format(mean_runtime))
 
@@ -130,7 +126,7 @@ def main(cfg):
         # name = k[7:] # remove "module."
         new_state_dict[name] = v
 
-    net.load_state_dict(new_state_dict)
+    net.load_state_dict(new_state_dict["state_dict"])
     net.cuda()
 
     dataset = TestDataset(cfg.dirname,
