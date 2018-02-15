@@ -33,7 +33,7 @@ class Solver():
                      list(self.refiner.progression[0].parameters()) + \
                      list(self.refiner.to_rgb[0].parameters())
         self.optim = optim.Adam(init_param, cfg.lr)
-        
+
         self.train_data = TrainDataset(self.data_path,
                                        self.data_names,
                                        self.scales,
@@ -49,7 +49,7 @@ class Solver():
         self.step = 0
         self.stage = 0
         self.max_stage = len(cfg.scales) - 1
-
+        
     def fit(self):
         cfg = self.cfg
         refiner = nn.DataParallel(self.refiner, device_ids=range(cfg.num_gpu))
@@ -77,13 +77,13 @@ class Solver():
     def _fit_stage(self, loader):
         cfg = self.cfg
         stage = self.stage
-
+            
         while True:
             for data in loader:
+                if (self.step+1) >= cfg.max_steps[stage]: return
                 self.refiner.train()
-
-                data = [Variable(d, requires_grad=False).cuda() for d in data]
                 
+                data = [Variable(d, requires_grad=False).cuda() for d in data]
                 output = self.refiner(data[0], stage)
                 loss = self.loss_fn(output, data[stage+1])
 
@@ -95,16 +95,15 @@ class Solver():
                 self.step += 1
                 if (self.step+1) % cfg.print_every == 0:
                     psnr = self.eval(stage)
-                    global_step = self.step + sum(cfg.max_steps[:stage])
+                    global_step = self.step + 1 + sum(cfg.max_steps[:stage])
                     
                     self.writer.add_scalar("loss", loss.data[0], global_step)
                     self.writer.add_scalar("psnr", psnr, global_step)
-                    print("[Stage {}: {}K/{}K] {:.3f}".
+                    print("[Stage{}: {}K/{}K] {:.3f}".
                           format(stage, int((self.step+1)/1000), int(cfg.max_steps[stage]/1000), psnr))
 
                     self.save(cfg.ckpt_dir, cfg.ckpt_name)
             
-                if (self.step+1) >= cfg.max_steps[stage]: return
 
     def eval(self, stage):
         cfg = self.cfg
@@ -117,15 +116,20 @@ class Solver():
         return mean_psnr
     
     def load(self, path):
-        state_dict = torch.load(path)
+        state_dict = torch.load(path)["state_dict"]
+        optim_dict = torch.load(path)["optimizer"]
+
         new_state_dict = OrderedDict()
         for k, v in state_dict.items():
             name = k
             # name = k[7:] # remove "module."
             new_state_dict[name] = v
         self.refiner.load_state_dict(new_state_dict)
+        self.optim.load_state_dict(optim_dict)
         
         print("Load pretrained {} model".format(path))
+        print("Resume training from stage {}, step {}"
+            .format(self.stage, self.step))
 
     def save(self, ckpt_dir, ckpt_name):
         save_path = os.path.join(

@@ -27,6 +27,7 @@ def parse_args():
 
     parser.add_argument("--patch_size", type=int, default=48)
     parser.add_argument("--lr", type=float, default=0.0001)
+    parser.add_argument("--weight_decay", type=float, default=0.0001)
     parser.add_argument("--clip", type=float, default=10.0)
 
     parser.add_argument("--test_dirname", type=str)
@@ -48,10 +49,6 @@ def main(cfg):
     solver = Solver(net, cfg)
     if cfg.load_path:
         solver.load(cfg.load_path)
-        last_two = cfg.load_path.split(".")[0].split("_")[-2:]
-        solver.stage = int(last_two[0])
-        solver.step = int(last_two[1])
-        print("Resume training from stage {}, step {}".format(solver.stage, solver.step))
     solver.fit()
 
 if __name__ == "__main__":
