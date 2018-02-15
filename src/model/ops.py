@@ -46,7 +46,7 @@ class BasicBlock(nn.Module):
     def __init__(self,
                  in_channels, out_channels,
                  ksize=3,
-                 act=nn.ReLU()):
+                 act=nn.ReLU(inplace=True)):
         super(BasicBlock, self).__init__()
 
         pad = 1 if ksize == 3 else 0
@@ -65,7 +65,7 @@ class BasicBlock(nn.Module):
 class ResidualBlock(nn.Module):
     def __init__(self, 
                  in_channels, out_channels,
-                 act=nn.ReLU()):
+                 act=nn.ReLU(inplace=True)):
         super(ResidualBlock, self).__init__()
 
         self.body = nn.Sequential(
@@ -78,8 +78,9 @@ class ResidualBlock(nn.Module):
         init_weights(self.modules)
         
     def forward(self, x):
+        residual = x
         out = self.body(x)
-        out = out + x
+        out += residual
         return out
 
 
@@ -87,7 +88,7 @@ class UpsampleBlock(nn.Module):
     def __init__(self, 
                  n_channels, 
                  scale, 
-                 act=nn.ReLU()):
+                 act=nn.ReLU(inplace=True)):
         super(UpsampleBlock, self).__init__()
 
         modules = []
