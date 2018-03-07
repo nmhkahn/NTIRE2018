@@ -17,16 +17,11 @@ class Solver():
     def __init__(self, model, cfg):
         self.cfg = cfg
 
+        self.scales = cfg.scales
         self.data_path = cfg.data_path
         self.data_names = cfg.data_names
-        self.scales = cfg.scales
-
-        if self.scales[0] == self.scales[1]:
-            do_up_first = False
-        else:
-            do_up_first = True
         
-        self.refiner = model(do_up_first).cuda()
+        self.refiner = model().cuda()
         self.loss_fn = nn.L1Loss().cuda()
         
         init_param = list(self.refiner.entry.parameters()) + \
@@ -39,14 +34,13 @@ class Solver():
                                        self.scales,
                                        size=cfg.patch_size)
         
-
         self.writer = SummaryWriter()
         num_params = 0
         for param in self.refiner.parameters():
             num_params += param.nelement()
         print("# of params:", num_params)
             
-        self.step = 0
+        self.step = 1
         self.stage = 0
         self.max_stage = len(cfg.scales) - 1
         
@@ -58,12 +52,12 @@ class Solver():
             self.stage = stage
             loader = DataLoader(self.train_data,
                                 batch_size=cfg.batch_size[stage],
-                                num_workers=1,
+                                num_workers=2,
                                 shuffle=True, drop_last=True)
             self._fit_stage(loader)
             
             # reset step for next stage
-            self.step = 0
+            self.step = 1
             if (stage+1) == self.max_stage: break
 
             # decay previous parameters and add new parameters to optim
@@ -80,7 +74,7 @@ class Solver():
             
         while True:
             for data in loader:
-                if (self.step+1) >= cfg.max_steps[stage]: return
+                if self.step >= cfg.max_steps[stage]: return
                 self.refiner.train()
                 
                 data = [Variable(d, requires_grad=False).cuda() for d in data]
@@ -92,18 +86,19 @@ class Solver():
                 nn.utils.clip_grad_norm(self.refiner.parameters(), cfg.clip)
                 self.optim.step()
 
-                self.step += 1
-                if (self.step+1) % cfg.print_every == 0:
+                if self.step % cfg.print_every == 0:
                     psnr = self.eval(stage)
-                    global_step = self.step + 1 + sum(cfg.max_steps[:stage])
+                    global_step = self.step + sum(cfg.max_steps[:stage])
                     
                     self.writer.add_scalar("loss", loss.data[0], global_step)
                     self.writer.add_scalar("psnr", psnr, global_step)
-                    print("[Stage{}: {}K/{}K] {:.3f}".
-                          format(stage, int((self.step+1)/1000), int(cfg.max_steps[stage]/1000), psnr))
+                    print("[Stage{}: {}K/{}K] {:.3f}".format(
+                        stage, int(self.step/1000), int(cfg.max_steps[stage]/1000), psnr))
 
                     self.save(cfg.ckpt_dir, cfg.ckpt_name)
-            
+
+                self.decay_lr(self.step)
+                self.step += 1
 
     def eval(self, stage):
         cfg = self.cfg
@@ -133,10 +128,24 @@ class Solver():
 
     def save(self, ckpt_dir, ckpt_name):
         save_path = os.path.join(
-            ckpt_dir, "{}_stage_{}_{}.pth".format(ckpt_name, self.stage, self.step+1))
+            ckpt_dir, "{}_stage_{}_{}.pth".format(ckpt_name, self.stage, self.step))
 
         state = {
             "state_dict": self.refiner.state_dict(),
             "optimizer": self.optim.state_dict()
         }
         torch.save(state, save_path)
+
+    def decay_lr(self, step):
+        if step % self.cfg.decay == 0:
+            decay_rate = 0.1
+        else:
+            decay_rate = 1
+        
+        for i, param_group in enumerate(self.optim.param_groups):
+            old_lr = param_group["lr"]
+            param_group["lr"] = old_lr * decay_rate
+
+            if param_group["lr"] != old_lr:
+                print("param_group {} is decayed from {:.1e} to {:.1e}".format(
+                    i, old_lr, param_group["lr"]))

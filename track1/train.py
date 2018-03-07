@@ -27,7 +27,7 @@ def parse_args():
 
     parser.add_argument("--patch_size", type=int, default=48)
     parser.add_argument("--lr", type=float, default=0.0001)
-    parser.add_argument("--weight_decay", type=float, default=0.0001)
+    parser.add_argument("--decay", type=float, default=100000)
     parser.add_argument("--clip", type=float, default=10.0)
 
     parser.add_argument("--test_dirname", type=str)
@@ -41,10 +41,7 @@ def main(cfg):
     net = importlib.import_module("model.{}".format(cfg.model)).Net
     print(json.dumps(vars(cfg), indent=4, sort_keys=True))
     
-    if cfg.model == "carn_prog":
-        from solver import Solver
-    else:
-        from solver_single import Solver
+    from solver import Solver
     
     solver = Solver(net, cfg)
     if cfg.load_path:
