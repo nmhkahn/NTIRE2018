@@ -9,16 +9,14 @@ class Block(nn.Module):
                  in_channels, out_channels):
         super(Block, self).__init__()
 
-        self.b1 = ops.ResidualBlock(128, 128)
-        self.b2 = ops.ResidualBlock(128, 128)
-        self.b3 = ops.ResidualBlock(128, 128)
-        self.b4 = ops.ResidualBlock(128, 128)
-        self.b5 = ops.ResidualBlock(128, 128)
-        self.c1 = ops.BasicBlock(128*2, 128, 1)
-        self.c2 = ops.BasicBlock(128*3, 128, 1)
-        self.c3 = ops.BasicBlock(128*4, 128, 1)
-        self.c4 = ops.BasicBlock(128*5, 128, 1)
-        self.c5 = ops.BasicBlock(128*6, 128, 1)
+        self.b1 = ops.ResidualBlock(64, 64)
+        self.b2 = ops.ResidualBlock(64, 64)
+        self.b3 = ops.ResidualBlock(64, 64)
+        self.b4 = ops.ResidualBlock(64, 64)
+        self.c1 = ops.BasicBlock(64*2, 64, 1)
+        self.c2 = ops.BasicBlock(64*3, 64, 1)
+        self.c3 = ops.BasicBlock(64*4, 64, 1)
+        self.c4 = ops.BasicBlock(64*5, 64, 1)
 
     def forward(self, x):
         c0 = o0 = x
@@ -39,31 +37,31 @@ class Block(nn.Module):
         c4 = torch.cat([c3, b4], dim=1)
         o4 = self.c4(c4)
         
-        b5 = self.b5(o4)
-        c5 = torch.cat([c4, b5], dim=1)
-        o5 = self.c5(c5)
-        
-        return o5
+        return o4
         
 
 class CARN(nn.Module):
     def __init__(self):
         super(CARN, self).__init__()
         
-        self.b1 = Block(128, 128)
-        self.b2 = Block(128, 128)
-        self.b3 = Block(128, 128)
-        self.b4 = Block(128, 128)
-        self.b5 = Block(128, 128)
-        self.b6 = Block(128, 128)
-        self.c1 = ops.BasicBlock(128*2, 128, 1)
-        self.c2 = ops.BasicBlock(128*3, 128, 1)
-        self.c3 = ops.BasicBlock(128*4, 128, 1)
-        self.c4 = ops.BasicBlock(128*5, 128, 1)
-        self.c5 = ops.BasicBlock(128*6, 128, 1)
-        self.c6 = ops.BasicBlock(128*7, 128, 1)
+        self.b1 = Block(64, 64)
+        self.b2 = Block(64, 64)
+        self.b3 = Block(64, 64)
+        self.b4 = Block(64, 64)
+        self.b5 = Block(64, 64)
+        self.b6 = Block(64, 64)
+        self.b7 = Block(64, 64)
+        self.b8 = Block(64, 64)
+        self.c1 = ops.BasicBlock(64*2, 64, 1)
+        self.c2 = ops.BasicBlock(64*3, 64, 1)
+        self.c3 = ops.BasicBlock(64*4, 64, 1)
+        self.c4 = ops.BasicBlock(64*5, 64, 1)
+        self.c5 = ops.BasicBlock(64*6, 64, 1)
+        self.c6 = ops.BasicBlock(64*7, 64, 1)
+        self.c7 = ops.BasicBlock(64*8, 64, 1)
+        self.c8 = ops.BasicBlock(64*9, 64, 1)
         
-        self.up = ops.UpsampleBlock(128, scale=2)
+        self.up = ops.UpsampleBlock(64, scale=2)
         
     def forward(self, x):
         c0 = o0 = x
@@ -92,7 +90,15 @@ class CARN(nn.Module):
         c6 = torch.cat([c5, b6], dim=1)
         o6 = self.c6(c6)
         
-        out = o6
+        b7 = self.b7(o6)
+        c7 = torch.cat([c6, b7], dim=1)
+        o7 = self.c7(c7)
+        
+        b8 = self.b8(o7)
+        c8 = torch.cat([c7, b8], dim=1)
+        o8 = self.c8(c8)
+        
+        out = o8
         out = self.up(out)
 
         return out
@@ -101,7 +107,7 @@ class CARN(nn.Module):
 class Net(nn.Module):
     def __init__(self):
         super(Net, self).__init__()
-        self.entry = ops.BasicBlock(3, 128, 3, act=nn.ReLU())
+        self.entry = ops.BasicBlock(3, 64, 3, act=nn.ReLU())
         self.progression = nn.ModuleList([
             CARN(),
             CARN(),
@@ -109,9 +115,9 @@ class Net(nn.Module):
         ])
         
         self.to_rgb = nn.ModuleList([
-            nn.Conv2d(128, 3, 3, 1, 1),
-            nn.Conv2d(128, 3, 3, 1, 1),
-            nn.Conv2d(128, 3, 3, 1, 1),
+            nn.Conv2d(64, 3, 3, 1, 1),
+            nn.Conv2d(64, 3, 3, 1, 1),
+            nn.Conv2d(64, 3, 3, 1, 1),
         ])
 
     def forward(self, x, stage):
@@ -124,3 +130,20 @@ class Net(nn.Module):
                 break
     
         return out
+
+    def forward_from_to(self, x, x_from, from_stage, to_stage):
+        if from_stage == 0:
+            out = self.entry(x_from)
+        else:
+            out = x_from
+        
+        for i in range(from_stage, to_stage):
+            out = self.progression[i](out)
+
+            if i == 2 and i == (to_stage-1):
+                out = self.to_rgb[i](out)
+                out += F.upsample(x, scale_factor=2*2**i)
+                break
+
+        return out, rgb
+        

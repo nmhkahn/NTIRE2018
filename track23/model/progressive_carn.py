@@ -5,18 +5,18 @@ from torch.nn import functional as F
 import model.ops as ops
 
 class Block(nn.Module):
-    def __init__(self, 
+    def __init__(self,
                  in_channels, out_channels):
         super(Block, self).__init__()
 
-        self.b1 = ops.ResidualBlock(192, 192)
-        self.b2 = ops.ResidualBlock(192, 192)
-        self.b3 = ops.ResidualBlock(192, 192)
-        self.b4 = ops.ResidualBlock(192, 192)
-        self.c1 = ops.BasicBlock(192*2, 192, 1)
-        self.c2 = ops.BasicBlock(192*3, 192, 1)
-        self.c3 = ops.BasicBlock(192*4, 192, 1)
-        self.c4 = ops.BasicBlock(192*5, 192, 1)
+        self.b1 = ops.ResidualBlock(64, 64)
+        self.b2 = ops.ResidualBlock(64, 64)
+        self.b3 = ops.ResidualBlock(64, 64)
+        self.b4 = ops.ResidualBlock(64, 64)
+        self.c1 = ops.BasicBlock(64*2, 64, 1)
+        self.c2 = ops.BasicBlock(64*3, 64, 1)
+        self.c3 = ops.BasicBlock(64*4, 64, 1)
+        self.c4 = ops.BasicBlock(64*5, 64, 1)
 
     def forward(self, x):
         c0 = o0 = x
@@ -24,51 +24,59 @@ class Block(nn.Module):
         b1 = self.b1(o0)
         c1 = torch.cat([c0, b1], dim=1)
         o1 = self.c1(c1)
-        
+
         b2 = self.b2(o1)
         c2 = torch.cat([c1, b2], dim=1)
         o2 = self.c2(c2)
-        
+
         b3 = self.b3(o2)
         c3 = torch.cat([c2, b3], dim=1)
         o3 = self.c3(c3)
-        
+
         b4 = self.b4(o3)
         c4 = torch.cat([c3, b4], dim=1)
         o4 = self.c4(c4)
-       
+
         return o4
-        
+
 
 class CARN(nn.Module):
     def __init__(self, do_up=True):
         super(CARN, self).__init__()
-        
-        self.b1 = Block(192, 192)
-        self.b2 = Block(192, 192)
-        self.b3 = Block(192, 192)
-        self.b4 = Block(192, 192)
-        self.c1 = ops.BasicBlock(192*2, 192, 1)
-        self.c2 = ops.BasicBlock(192*3, 192, 1)
-        self.c3 = ops.BasicBlock(192*4, 192, 1)
-        self.c4 = ops.BasicBlock(192*5, 192, 1)
-        
+
+        self.b1 = Block(64, 64)
+        self.b2 = Block(64, 64)
+        self.b3 = Block(64, 64)
+        self.b4 = Block(64, 64)
+        self.b5 = Block(64, 64)
+        self.b6 = Block(64, 64)
+        self.b7 = Block(64, 64)
+        self.b8 = Block(64, 64)
+        self.c1 = ops.BasicBlock(64*2, 64, 1)
+        self.c2 = ops.BasicBlock(64*3, 64, 1)
+        self.c3 = ops.BasicBlock(64*4, 64, 1)
+        self.c4 = ops.BasicBlock(64*5, 64, 1)
+        self.c5 = ops.BasicBlock(64*6, 64, 1)
+        self.c6 = ops.BasicBlock(64*7, 64, 1)
+        self.c7 = ops.BasicBlock(64*8, 64, 1)
+        self.c8 = ops.BasicBlock(64*9, 64, 1)
+
         if do_up:
-            self.up = ops.UpsampleBlock(192, scale=4)
+            self.up = ops.UpsampleBlock(64, scale=2)
 
         self.do_up = do_up
-        
+
     def forward(self, x):
         c0 = o0 = x
 
         b1 = self.b1(o0)
         c1 = torch.cat([c0, b1], dim=1)
         o1 = self.c1(c1)
-        
+
         b2 = self.b2(o1)
         c2 = torch.cat([c1, b2], dim=1)
         o2 = self.c2(c2)
-        
+
         b3 = self.b3(o2)
         c3 = torch.cat([c2, b3], dim=1)
         o3 = self.c3(c3)
@@ -76,8 +84,24 @@ class CARN(nn.Module):
         b4 = self.b4(o3)
         c4 = torch.cat([c3, b4], dim=1)
         o4 = self.c4(c4)
-        
-        out = o4
+
+        b5 = self.b5(o4)
+        c5 = torch.cat([c4, b5], dim=1)
+        o5 = self.c5(c5)
+
+        b6 = self.b6(o5)
+        c6 = torch.cat([c5, b6], dim=1)
+        o6 = self.c6(c6)
+
+        b7 = self.b7(o6)
+        c7 = torch.cat([c6, b7], dim=1)
+        o7 = self.c7(c7)
+
+        b8 = self.b8(o7)
+        c8 = torch.cat([c7, b8], dim=1)
+        o8 = self.c8(c8)
+
+        out = o8
         if self.do_up:
             out = self.up(out)
 
@@ -87,15 +111,17 @@ class CARN(nn.Module):
 class Net(nn.Module):
     def __init__(self):
         super(Net, self).__init__()
-        self.entry = ops.BasicBlock(3, 192, 3, act=nn.ReLU())
+        self.entry = ops.BasicBlock(3, 64, 3, act=nn.ReLU())
         self.progression = nn.ModuleList([
             CARN(False),
             CARN(),
+            CARN()
         ])
-        
+
         self.to_rgb = nn.ModuleList([
-            nn.Conv2d(192, 3, 3, 1, 1),
-            nn.Conv2d(192, 3, 3, 1, 1),
+            nn.Conv2d(64, 3, 3, 1, 1),
+            nn.Conv2d(64, 3, 3, 1, 1),
+            nn.Conv2d(64, 3, 3, 1, 1)
         ])
 
     def forward(self, x, stage):
@@ -107,7 +133,7 @@ class Net(nn.Module):
                 if stage == 0:
                     out += x
                 else:
-                    out += F.upsample(x, scale_factor=2*2**stage)
+                    out += F.upsample(x, scale_factor=2*2**(stage-1))
                 break
-    
+
         return out

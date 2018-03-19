@@ -8,40 +8,6 @@ def init_weights(modules):
     pass
 
 
-class CharbonnierLoss(nn.Module):
-    def __init__(self):
-        super(CharbonnierLoss, self).__init__()
-        self.eps = 1e-6
-
-    def forward(self, X, Y):
-        diff = torch.add(X, -Y)
-        error = torch.sqrt(diff * diff + self.eps)
-        loss = torch.sum(error) 
-        return loss
-
-
-class MeanShift(nn.Module):
-    def __init__(self, mean_rgb, sub):
-        super(MeanShift, self).__init__()
-
-        sign = -1 if sub else 1
-        r = mean_rgb[0] * sign
-        g = mean_rgb[1] * sign
-        b = mean_rgb[2] * sign
-
-        self.shifter = nn.Conv2d(3, 3, 1, 1, 0)
-        self.shifter.weight.data = torch.eye(3).view(3, 3, 1, 1)
-        self.shifter.bias.data   = torch.Tensor([r, g, b])
-
-        # Freeze the mean shift layer
-        for params in self.shifter.parameters():
-            params.requires_grad = False
-
-    def forward(self, x):
-        x = self.shifter(x)
-        return x
-
-
 class BasicBlock(nn.Module):
     def __init__(self,
                  in_channels, out_channels,
@@ -56,14 +22,14 @@ class BasicBlock(nn.Module):
         )
 
         init_weights(self.modules)
-        
+
     def forward(self, x):
         out = self.body(x)
         return out
 
 
 class ResidualBlock(nn.Module):
-    def __init__(self, 
+    def __init__(self,
                  in_channels, out_channels,
                  act=nn.ReLU(inplace=True)):
         super(ResidualBlock, self).__init__()
@@ -76,7 +42,7 @@ class ResidualBlock(nn.Module):
         )
 
         init_weights(self.modules)
-        
+
     def forward(self, x):
         residual = x
         out = self.body(x)
@@ -85,9 +51,9 @@ class ResidualBlock(nn.Module):
 
 
 class UpsampleBlock(nn.Module):
-    def __init__(self, 
-                 n_channels, 
-                 scale, 
+    def __init__(self,
+                 n_channels,
+                 scale,
                  act=nn.ReLU(inplace=True)):
         super(UpsampleBlock, self).__init__()
 
@@ -99,7 +65,7 @@ class UpsampleBlock(nn.Module):
         self.body = nn.Sequential(*modules)
 
         init_weights(self.modules)
-        
+
     def forward(self, x):
         out = self.body(x)
         return out

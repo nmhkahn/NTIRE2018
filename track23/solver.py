@@ -20,10 +20,10 @@ class Solver():
         self.scales = cfg.scales
         self.data_path = cfg.data_path
         self.data_names = cfg.data_names
-        
+
         self.refiner = model().cuda()
         self.loss_fn = nn.L1Loss().cuda()
-        
+
         init_param = list(self.refiner.entry.parameters()) + \
                      list(self.refiner.progression[0].parameters()) + \
                      list(self.refiner.to_rgb[0].parameters())
@@ -33,29 +33,29 @@ class Solver():
                                        self.data_names,
                                        self.scales,
                                        size=cfg.patch_size)
-        
+
         self.writer = SummaryWriter()
         num_params = 0
         for param in self.refiner.parameters():
             num_params += param.nelement()
         print("# of params:", num_params)
-            
+
         self.step = 1
         self.stage = 0
         self.max_stage = len(cfg.scales) - 1
-        
+
     def fit(self):
         cfg = self.cfg
         refiner = nn.DataParallel(self.refiner, device_ids=range(cfg.num_gpu))
-        
+
         for stage in range(self.stage, self.max_stage):
             self.stage = stage
             loader = DataLoader(self.train_data,
                                 batch_size=cfg.batch_size[stage],
                                 num_workers=2,
                                 shuffle=True, drop_last=True)
-            self._fit_stage(loader)
-            
+            self._fit_stage(loader, refiner)
+
             # reset step for next stage
             self.step = 1
             if (stage+1) == self.max_stage: break
@@ -67,29 +67,29 @@ class Solver():
             new_params = list(self.refiner.progression[stage+1].parameters()) + \
                          list(self.refiner.to_rgb[stage+1].parameters())
             self.optim.add_param_group({"params": new_params, "lr": cfg.lr})
-            
-    def _fit_stage(self, loader):
+
+    def _fit_stage(self, loader, refiner):
         cfg = self.cfg
         stage = self.stage
-            
+
         while True:
             for data in loader:
                 if self.step >= cfg.max_steps[stage]: return
-                self.refiner.train()
-                
+                refiner.train()
+
                 data = [Variable(d, requires_grad=False).cuda() for d in data]
-                output = self.refiner(data[0], stage)
+                output = refiner(data[0], stage)
                 loss = self.loss_fn(output, data[stage+1])
 
                 self.optim.zero_grad()
                 loss.backward()
-                nn.utils.clip_grad_norm(self.refiner.parameters(), cfg.clip)
+                nn.utils.clip_grad_norm(refiner.parameters(), cfg.clip)
                 self.optim.step()
 
                 if self.step % cfg.print_every == 0:
                     psnr = self.eval(stage)
                     global_step = self.step + sum(cfg.max_steps[:stage])
-                    
+
                     self.writer.add_scalar("loss", loss.data[0], global_step)
                     self.writer.add_scalar("psnr", psnr, global_step)
                     print("[Stage{}: {}K/{}K] {:.3f}".format(
@@ -102,14 +102,14 @@ class Solver():
 
     def eval(self, stage):
         cfg = self.cfg
-        cfg.scale_diff = int(cfg.scales[0]/cfg.scales[stage])
+        cfg.scale_diff = int(cfg.scales[0]/cfg.scales[stage+1])
         dataset = TestDataset(cfg.test_dirname,
                               cfg.scale_diff,
                               cfg.test_data_from,
                               cfg.test_data_to)
         _, mean_psnr = evaluate(self.refiner, dataset, 2, stage, cfg)
         return mean_psnr
-    
+
     def load(self, path):
         state_dict = torch.load(path)["state_dict"]
         optim_dict = torch.load(path)["optimizer"]
@@ -121,27 +121,18 @@ class Solver():
             new_state_dict[name] = v
         self.refiner.load_state_dict(new_state_dict)
         self.optim.load_state_dict(optim_dict)
-        
-        print("Load pretrained {} model".format(path))
-        print("Resume training from stage {}, step {}"
-            .format(self.stage, self.step))
 
     def save(self, ckpt_dir, ckpt_name):
         save_path = os.path.join(
             ckpt_dir, "{}_stage_{}_{}.pth".format(ckpt_name, self.stage, self.step))
-
-        state = {
-            "state_dict": self.refiner.state_dict(),
-            "optimizer": self.optim.state_dict()
-        }
-        torch.save(state, save_path)
+        torch.save(self.refiner.state_dict(), save_path)
 
     def decay_lr(self, step):
         if step % self.cfg.decay == 0:
             decay_rate = 0.1
         else:
             decay_rate = 1
-        
+
         for i, param_group in enumerate(self.optim.param_groups):
             old_lr = param_group["lr"]
             param_group["lr"] = old_lr * decay_rate

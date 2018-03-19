@@ -10,8 +10,8 @@ def parse_args():
     parser.add_argument("--model", type=str)
     parser.add_argument("--ckpt_name", type=str)
     parser.add_argument("--data_path", type=str)
-    parser.add_argument('--data_names', nargs="+", type=str, required=True)
-    parser.add_argument('--scales', nargs="+", type=int, required=True)
+    parser.add_argument("--data_names", nargs="+", type=str, required=True)
+    parser.add_argument("--scales", nargs="+", type=int, required=True)
     parser.add_argument("--max_steps", nargs="+", type=int, required=True)
     parser.add_argument("--batch_size", nargs="+", type=int, required=True)
 
