@@ -26,52 +26,7 @@ def psnr(im1, im2):
     im2 = im2double(im2)
     psnr = measure.compare_psnr(im1, im2, data_range=1)
     return psnr
-
-def generate_intra_ensemble(net, patch, stage, cfg):
-    x = patch.unsqueeze(0)
-    out = x.clone()
-    
-    # generate first stage using input patch
-    in_ = net.forward_from_to(x, out, 0, 1)
-    in_ = in_.data[0].cpu().numpy()
-
-    h, w = patch.size(1)*cfg.scale_diff, patch.size(2)*cfg.scale_diff
-    patches = np.empty((4, h, w, 3), dtype=np.uint8)
-    for i, angle_i in enumerate([0, 2]):
-        # intra-ensemble for first -> second stage
-        out = np.rot90(in_, angle_i, axes=(1, 2)).copy()
-        
-        out = Variable(torch.from_numpy(out), volatile=True)
-        out = out.unsqueeze(0).cuda()
-
-        out_ = net.forward_from_to(x, out, 1, 2)
-        out_ = out_.data[0].cpu().numpy()
-
-        for j, angle_j in enumerate([0, 2]):
-            out = np.rot90(out_, angle_j, axes=(1, 2)).copy()
-    
-            out = Variable(torch.from_numpy(out), volatile=True)
-            out = out.unsqueeze(0).cuda()
-            
-            # transform x
-            index = (angle_i+angle_j) % 4
-            x_np = x.data[0].cpu().numpy()
-            x_transformed = np.rot90(x_np, index, axes=(1, 2)).copy()
-            x_transformed = Variable(torch.from_numpy(x_transformed), volatile=True)
-            x_transformed = x_transformed.unsqueeze(0).cuda()
-
-            out = net.forward_from_to(x_transformed, out, 2, 3)
-            out_np = out.data[0].cpu().mul(255).clamp(0, 255).byte().permute(1, 2, 0).numpy()
-            
-            misc.imsave("result/{}_{}_0.png".format(i, j), out_np)
-            # recover to origin
-            out_np = recover_origin(out_np, index)
-            
-            patches[i*2+j] = out_np
-
-    out = np.mean(patches, axis=0)
-    return out
-    
+   
 
 def generate_single(net, lr, hr, chunk, stage, cfg):
     scale_diff = cfg.scale_diff
@@ -96,7 +51,6 @@ def generate_single(net, lr, hr, chunk, stage, cfg):
     for i, patch in enumerate(lr_patch):
         out = net(patch.unsqueeze(0), stage).data[0]
         out = out.cpu().mul(255).clamp(0, 255).byte().permute(1, 2, 0).numpy()
-        #out = generate_intra_ensemble(net, patch, stage, cfg)
         sr[i] = out
 
     result = np.empty((h, w, 3), dtype=np.uint8)
@@ -161,8 +115,6 @@ def evaluate(net, dataset, chunk, stage, cfg):
         mean_psnr += psnr(hr, sr) / len(dataset)
         mean_runtime += (t2-t1) / len(dataset)
 
-        print(step, psnr(hr, sr), t2-t1)
-
     return mean_runtime, mean_psnr
 
 
@@ -175,7 +127,6 @@ def parse_args():
     parser.add_argument("--data_to", type=str)
 
     parser.add_argument("--ckpt_path", type=str)
-    parser.add_argument("--sample_dir", type=str)
     parser.add_argument("--shave", type=int, default=20)
 
     parser.add_argument("--chunk", type=int)
@@ -204,7 +155,7 @@ def main(cfg):
         # name = k[7:] # remove "module."
         new_state_dict[name] = v
 
-    net.load_state_dict(new_state_dict["state_dict"])
+    net.load_state_dict(new_state_dict)
     net.cuda()
 
     dataset = TestDataset(cfg.dirname,

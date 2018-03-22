@@ -43,7 +43,7 @@ def output_measures(img_orig, img_out):
     return max(psnr)
 
 
-def evaluate_single(net, lr, hr, chunk, stage, cfg):
+def generate_single(net, lr, hr, chunk, stage, cfg):
     scale_diff = cfg.scale_diff
     h, w = lr.size()[1:]
     h_chunk, w_chunk = int(h/chunk), int(w/chunk)
@@ -59,14 +59,16 @@ def evaluate_single(net, lr, hr, chunk, stage, cfg):
             lr_patch[i+j*chunk].copy_(lr[:, h_from:h_to, w_from:w_to])
     lr_patch = Variable(lr_patch, volatile=True).cuda()
 
-    sr = torch.FloatTensor(chunk**2, 3, h_chop*scale_diff, w_chop*scale_diff)
-    for i, patch in enumerate(lr_patch):
-        sr[i] = net(patch.unsqueeze(0), stage).data
-
     h, h_chunk, h_chop = h*scale_diff, h_chunk*scale_diff, h_chop*scale_diff
     w, w_chunk, w_chop = w*scale_diff, w_chunk*scale_diff, w_chop*scale_diff
 
-    result = torch.FloatTensor(3, h, w).cuda()
+    sr = np.empty((chunk**2, h_chop, w_chop, 3), dtype=np.uint8)
+    for i, patch in enumerate(lr_patch):
+        out = net(patch.unsqueeze(0), stage).data[0]
+        out = out.cpu().mul(255).clamp(0, 255).byte().permute(1, 2, 0).numpy()
+        sr[i] = out
+
+    result = np.empty((h, w, 3), dtype=np.uint8)
     for i in range(chunk):
         for j in range(chunk):
             h_from, h_to = 0, h_chunk
@@ -81,10 +83,10 @@ def evaluate_single(net, lr, hr, chunk, stage, cfg):
                 w_from, w_to = -w_chunk-(w-(j+1)*w_chunk), None
                 ww_from, ww_to = j*w_chunk, None
 
-            result[:, hh_from:hh_to, ww_from:ww_to].copy_(
-                sr[i+j*chunk, :, h_from:h_to, w_from:w_to])
+            result[hh_from:hh_to, ww_from:ww_to, :] = \
+                copy.deepcopy(sr[i+j*chunk, h_from:h_to, w_from:w_to, :])
     return result
-
+ 
 
 def recover_origin(image, index):
     angle = [0, 3, 2, 1]
@@ -107,8 +109,7 @@ def evaluate(net, dataset, chunk, stage, cfg):
 
         t1 = time.time()
         for i, lr in enumerate(lr_ensemble):
-            tmp_image = evaluate_single(net, lr, hr, chunk, stage, cfg)
-            tmp_image = tmp_image.cpu().mul(255).clamp(0, 255).byte().permute(1, 2, 0).numpy()
+            tmp_image = generate_single(net, lr, hr, chunk, stage, cfg)
             sr_ensemble[i] = recover_origin(tmp_image, i)
 
         sr = np.mean(sr_ensemble, axis=0)
@@ -157,7 +158,7 @@ def main(cfg):
     net = module.Net()
     print(json.dumps(vars(cfg), indent=4, sort_keys=True))
 
-    state_dict = torch.load(cfg.ckpt_path)["state_dict"]
+    state_dict = torch.load(cfg.ckpt_path)
     new_state_dict = OrderedDict()
     for k, v in state_dict.items():
         name = k
@@ -170,7 +171,8 @@ def main(cfg):
     dataset = TestDataset(cfg.dirname,
                           cfg.scale_diff,
                           cfg.data_from,
-                          cfg.data_to)
+                          cfg.data_to,
+                          self_ensemble=True)
 
     mean_runtime, mean_psnr = evaluate(net, dataset, cfg.chunk, cfg.stage, cfg)
     print("Mean runtime: {:.3f}s mean PSNR: {:.3f}".format(mean_runtime, mean_psnr))

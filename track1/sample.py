@@ -59,7 +59,6 @@ def generate_single(net, lr, chunk, stage, cfg):
     for i, patch in enumerate(lr_patch):
         out = net(patch.unsqueeze(0), stage).data[0]
         out = out.cpu().mul(255).clamp(0, 255).byte().permute(1, 2, 0).numpy()
-        #out = generate_intra_ensemble(net, patch, stage, cfg)
         sr[i] = out
 
     result = np.empty((h, w, 3), dtype=np.uint8)
@@ -147,7 +146,7 @@ def main(cfg):
         # name = k[7:] # remove "module."
         new_state_dict[name] = v
 
-    net.load_state_dict(new_state_dict["state_dict"])
+    net.load_state_dict(new_state_dict)
     net.cuda()
 
     dataset = TestDataset(cfg.dirname,

@@ -1,6 +1,7 @@
 import os
 import json
 import time
+import copy
 import importlib
 import argparse
 import numpy as np
@@ -35,65 +36,83 @@ def save_image(arr, filename):
     im.save(filename)
 
 
-def sample(net, dataset, chunk, stage, cfg):
-    from torch.nn import functional as F
-    
+def generate_single(net, lr, chunk, stage, cfg):
     scale_diff = cfg.scale_diff
+    h, w = lr.size()[1:]
+    h_chunk, w_chunk = int(h/chunk), int(w/chunk)
+    h_chop, w_chop   = h_chunk + cfg.shave, w_chunk + cfg.shave
 
+    lr_patch = torch.FloatTensor(chunk**2, 3, h_chop, w_chop)
+    for i in range(chunk):
+        for j in range(chunk):
+            h_from, h_to = i*h_chunk, (i+1)*h_chunk+cfg.shave
+            w_from, w_to = j*w_chunk, (j+1)*w_chunk+cfg.shave
+            if (i+1) == chunk: h_from, h_to = h-h_chop, h
+            if (j+1) == chunk: w_from, w_to = w-w_chop, w
+            lr_patch[i+j*chunk].copy_(lr[:, h_from:h_to, w_from:w_to])
+    lr_patch = Variable(lr_patch, volatile=True).cuda()
+    
+    h, h_chunk, h_chop = h*scale_diff, h_chunk*scale_diff, h_chop*scale_diff
+    w, w_chunk, w_chop = w*scale_diff, w_chunk*scale_diff, w_chop*scale_diff
+
+    sr = np.empty((chunk**2, h_chop, w_chop, 3), dtype=np.uint8)
+    for i, patch in enumerate(lr_patch):
+        out = net(patch.unsqueeze(0), stage).data[0]
+        out = out.cpu().mul(255).clamp(0, 255).byte().permute(1, 2, 0).numpy()
+        sr[i] = out
+
+    result = np.empty((h, w, 3), dtype=np.uint8)
+    for i in range(chunk):
+        for j in range(chunk):
+            h_from, h_to = 0, h_chunk
+            w_from, w_to = 0, w_chunk
+            hh_from, hh_to = i*h_chunk, (i+1)*h_chunk
+            ww_from, ww_to = j*w_chunk, (j+1)*w_chunk
+
+            if (i+1) == chunk:
+                h_from, h_to = -h_chunk-(h-(i+1)*h_chunk), None
+                hh_from, hh_to = i*h_chunk, None
+            if (j+1) == chunk:
+                w_from, w_to = -w_chunk-(w-(j+1)*w_chunk), None
+                ww_from, ww_to = j*w_chunk, None
+
+            result[hh_from:hh_to, ww_from:ww_to, :] = \
+                copy.deepcopy(sr[i+j*chunk, h_from:h_to, w_from:w_to, :])
+    return result
+
+
+def recover_origin(image, index):
+    angle = [0, 3, 2, 1]
+    image = np.rot90(image, angle[index%4]).copy()
+    if index > 3:
+        image = np.fliplr(image).copy()
+
+    return image
+
+
+def sample(net, dataset, chunk, stage, cfg):
+    net.eval()
+    scale_diff = cfg.scale_diff
     mean_psnr, mean_runtime = 0, 0
-    for step, (lr, hr, name) in enumerate(dataset):
+    for step, (lr_ensemble, name) in enumerate(dataset):
+
+        h, w = lr_ensemble[0].size()[1:]
+        sr_ensemble = np.zeros((len(lr_ensemble), h*scale_diff, w*scale_diff, 3))
+
         t1 = time.time()
-        h, w = lr.size()[1:]
-        h_chunk, w_chunk = int(h/chunk), int(w/chunk)
-        h_chop, w_chop   = h_chunk + cfg.shave, w_chunk + cfg.shave
+        for i, lr in enumerate(lr_ensemble):
+            tmp_image = generate_single(net, lr, chunk, stage, cfg)
+            sr_ensemble[i] = recover_origin(tmp_image, i)
 
-        lr_patch = torch.FloatTensor(chunk**2, 3, h_chop, w_chop)
-        for i in range(chunk):
-            for j in range(chunk):
-                h_from, h_to = i*h_chunk, (i+1)*h_chunk+cfg.shave
-                w_from, w_to = j*w_chunk, (j+1)*w_chunk+cfg.shave
-                if (i+1) == chunk: h_from, h_to = h-h_chop, h
-                if (j+1) == chunk: w_from, w_to = w-w_chop, w
-                lr_patch[i+j*chunk].copy_(lr[:, h_from:h_to, w_from:w_to])
-        lr_patch = Variable(lr_patch, volatile=True).cuda()
-       
-        sr = torch.FloatTensor(chunk**2, 3, h_chop*scale_diff, w_chop*scale_diff)
-        for i, patch in enumerate(lr_patch):
-            sr[i] = net(patch.unsqueeze(0), stage).data
-           
-        h, h_chunk, h_chop = h*scale_diff, h_chunk*scale_diff, h_chop*scale_diff
-        w, w_chunk, w_chop = w*scale_diff, w_chunk*scale_diff, w_chop*scale_diff
+        sr = np.mean(sr_ensemble, axis=0)
+        sr = np.clip(sr, 0, 255)
+        sr = sr.astype(np.uint8)
 
-        result = torch.FloatTensor(3, h, w).cuda()
-        for i in range(chunk):
-            for j in range(chunk):
-                h_from, h_to = 0, h_chunk
-                w_from, w_to = 0, w_chunk
-                hh_from, hh_to = i*h_chunk, (i+1)*h_chunk
-                ww_from, ww_to = j*w_chunk, (j+1)*w_chunk
-
-                if (i+1) == chunk: 
-                    h_from, h_to = -h_chunk-(h-(i+1)*h_chunk), None
-                    hh_from, hh_to = i*h_chunk, None
-                if (j+1) == chunk: 
-                    w_from, w_to = -w_chunk-(w-(j+1)*w_chunk), None
-                    ww_from, ww_to = j*w_chunk, None
-
-                result[:, hh_from:hh_to, ww_from:ww_to].copy_(
-                    sr[i+j*chunk, :, h_from:h_to, w_from:w_to])
         t2 = time.time()
 
-        sr = result.cpu().mul(255).clamp(0, 255).byte().permute(1, 2, 0).numpy()
-        
         model_name = cfg.ckpt_path.split(".")[0].split("/")[-1]
         name_from = cfg.data_from.split("_")[-1]
-        name_to   = cfg.data_to.split("_")[-1]
-        sr_dir = os.path.join(cfg.sample_dir,
-                              model_name, 
-                              "{}-{}".format(name_from, name_to))
-
-        # TODO: temp upsampling
-        sr = misc.imresize(sr, 4/scale_diff)
+        sr_dir = os.path.join(cfg.sample_dir, model_name)
         
         if not os.path.exists(sr_dir):
             os.makedirs(sr_dir)
@@ -108,19 +127,17 @@ def sample(net, dataset, chunk, stage, cfg):
 
 
 def main(cfg):
-    cfg.scale_from = [int(s) for s in cfg.data_from if s.isdigit()][-1]
+    cfg.scales = list()
+    cfg.scales.append([int(s) for s in cfg.data_from if s.isdigit()][-1])
     if "HR" in cfg.data_to:
-        cfg.scale_to = 1
+        cfg.scales.append(1)
     else:
-        cfg.scale_to = [int(s) for s in cfg.data_to if s.isdigit()][-1]
-    cfg.scale_diff = 1 # int(cfg.scale_from/cfg.scale_to)
-    print(json.dumps(vars(cfg), indent=4, sort_keys=True))
+        cfg.scales.append([int(s) for s in cfg.data_to if s.isdigit()][-1])
+    cfg.scale_diff = 4
 
     module = importlib.import_module("model.{}".format(cfg.model))
-
-    do_up_first = True if cfg.scale_from == 8 else False
     net = module.Net()
-    net.eval()
+    print(json.dumps(vars(cfg), indent=4, sort_keys=True))
     
     state_dict = torch.load(cfg.ckpt_path)
     new_state_dict = OrderedDict()
@@ -129,13 +146,12 @@ def main(cfg):
         # name = k[7:] # remove "module."
         new_state_dict[name] = v
 
-    net.load_state_dict(new_state_dict["state_dict"])
+    net.load_state_dict(new_state_dict)
     net.cuda()
 
     dataset = TestDataset(cfg.dirname,
                           cfg.scale_diff,
-                          cfg.data_from,
-                          cfg.data_to)
+                          cfg.data_from, self_ensemble=True)
     sample(net, dataset, cfg.chunk, cfg.stage, cfg)
  
 

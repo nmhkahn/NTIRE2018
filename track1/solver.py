@@ -110,18 +110,6 @@ class Solver():
         _, mean_psnr = evaluate(self.refiner, dataset, 2, stage, cfg)
         return mean_psnr
 
-    def load(self, path):
-        state_dict = torch.load(path)["state_dict"]
-        optim_dict = torch.load(path)["optimizer"]
-
-        new_state_dict = OrderedDict()
-        for k, v in state_dict.items():
-            name = k
-            # name = k[7:] # remove "module."
-            new_state_dict[name] = v
-        self.refiner.load_state_dict(new_state_dict)
-        self.optim.load_state_dict(optim_dict)
-
     def save(self, ckpt_dir, ckpt_name):
         save_path = os.path.join(
             ckpt_dir, "{}_stage_{}_{}.pth".format(ckpt_name, self.stage, self.step))
