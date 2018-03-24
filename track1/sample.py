@@ -146,12 +146,15 @@ def main(cfg):
         # name = k[7:] # remove "module."
         new_state_dict[name] = v
 
-    net.load_state_dict(new_state_dict)
+    if new_state_dict.get("optimizer"):
+        net.load_state_dict(new_state_dict["state_dict"])
+    else:
+        net.load_state_dict(new_state_dict)
     net.cuda()
 
     dataset = TestDataset(cfg.dirname,
                           cfg.scale_diff,
-                          cfg.data_from, self_ensemble=True)
+                          cfg.data_from, self_ensemble=False)
     sample(net, dataset, cfg.chunk, cfg.stage, cfg)
  
 
