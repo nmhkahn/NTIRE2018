@@ -145,11 +145,7 @@ def main(cfg):
         name = k
         # name = k[7:] # remove "module."
         new_state_dict[name] = v
-
-    if new_state_dict.get("optimizer"):
-        net.load_state_dict(new_state_dict["state_dict"])
-    else:
-        net.load_state_dict(new_state_dict)
+    net.load_state_dict(new_state_dict)
     net.cuda()
 
     dataset = TestDataset(cfg.dirname,
